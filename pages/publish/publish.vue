@@ -23,7 +23,7 @@
  <view v-else class="form-section">
   <text class="form-heading">物品照片</text>
   <view class="upload-row" @tap="selectImage"><image v-if="photo" :src="photo" mode="aspectFill"/><view v-else><AppIcon name="camera" :size="49"/><text>拍照或从相册选择</text></view></view>
-  <text class="note">可选填，建议上传清晰的物品照片。当前数据仅保存在本机，不会上传至服务器。</text>
+  <text class="note">{{aiAvailable?'可选填，请勿上传证件照片。照片保存在本机；使用匹配提醒时，照片和文字会发送至 DeepSeek 分析。':'可选填，建议上传清晰的物品照片。当前数据仅保存在本机，不会上传至服务器。'}}</text>
   <view class="recognition" @tap="runRecognition"><AppIcon name="image" :size="30"/><text>尝试图片识别</text><text class="dim">（服务待接入）</text></view>
  </view>
  <view v-if="kind==='found'" class="form-section">
@@ -32,13 +32,13 @@
   <picker :range="pointNames" :value="pointIndex" @change="e=>pointIndex=Number(e.detail.value)"><view class="field point-field">{{pointNames[pointIndex]}}<text class="pick-arrow">⌄</text></view></picker>
  </view>
  <view class="footer-actions"><button class="btn-outline" @tap="cancel">取消</button><button class="btn-primary" :disabled="saving" @tap="submit">提交审核</button></view>
- <view class="bottom-note">发布后由管理员审核，通过后在大厅展示。当前版本暂无真正的图像识别和消息推送服务。</view>
+ <view class="bottom-note">发布后由管理员审核，通过后在大厅展示。{{aiAvailable?'匹配提醒需打开页面查看；暂不支持后台远程推送。':'当前版本暂无真正的图像识别和消息推送服务。'}}</view>
 </view>
 </template>
 <script setup>
 import {ref,computed} from 'vue';import {onLoad} from '@dcloudio/uni-app';import AppIcon from '../../components/AppIcon.vue'
 import {CATEGORIES,LOST_AREAS,publish,places,maskName,maskDocument,requireRole} from '../../utils/store.js'
-import {recognizeItemImage} from '../../utils/ai-service.js'
+import {recognizeItemImage,aiAvailable} from '../../utils/ai-service.js'
 const kind=ref('lost'),categories=CATEGORIES,categoryIndex=ref(0),areas=LOST_AREAS,areaIndex=ref(0),title=ref(''),description=ref(''),holderName=ref(''),documentNo=ref(''),photo=ref(''),saving=ref(false),pointIndex=ref(0),points=ref([])
 const isDocument=computed(()=>CATEGORIES[categoryIndex.value]==='证件卡类')
 const pointNames=computed(()=>['暂不指定，由管理员安排',...points.value.map(p=>p.name)])
