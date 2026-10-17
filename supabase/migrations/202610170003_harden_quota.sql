@@ -22,3 +22,8 @@ $$;
 revoke all on function public.consume_ai_match_quota_for_user(uuid) from public, anon, authenticated;
 grant execute on function public.consume_ai_match_quota_for_user(uuid) to service_role;
 drop function public.consume_ai_match_quota();
+
+-- The service role already has the required table and Vault permissions.
+-- Keep these public RPCs as invokers, with EXECUTE granted only to service_role.
+alter function public.consume_ai_match_quota_for_user(uuid) security invoker;
+alter function public.get_deepseek_api_key() security invoker;
