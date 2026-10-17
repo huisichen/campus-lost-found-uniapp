@@ -1,0 +1,18 @@
+{
+  "name":"珞珈失物招领",
+  "appid":"__UNI__DEMOLOSTFOUND",
+  "description":"校园失物招领课程项目，非学校官方产品",
+  "versionName":"1.0.0",
+  "versionCode":100,
+  "vueVersion":"3",
+  "transformPx":false,
+  "app-plus":{
+    "usingComponents":true,
+    "nvueCompiler":"uni-app",
+    "distribute":{
+      "android":{"permissions":["<uses-permission android:name=\"android.permission.INTERNET\"/>"]},
+      "ios":{}
+    }
+  },
+  "h5":{"title":"珞珈失物招领"}
+}

@@ -1,0 +1,22 @@
+<template>
+<view class="page-body place-management">
+ <view class="admin-title"><view class="flex-between"><text>归还地点管理</text><button class="add-button" @tap="addNew">＋ 新增</button></view><text>地点必须先核实再标记为“已确认”</text></view>
+ <view class="warning"><AppIcon name="shield" :size="35"/><text>当前归还点未经学校核实，不是正式地址。管理员可以按实际情况维护不同地点、负责人和开放时间。</text></view>
+ <view class="place-card" v-for="p in list" :key="p.id"><view class="flex-between"><text class="place-title">{{p.name}}</text><text class="pill" :class="p.verified?'pill-ok':'pill-wait'">{{p.verified?'已确认':'待核实'}}</text></view><view class="place-sub">{{p.address}}</view><view class="place-sub">开放时间：{{p.hours}}</view><view class="place-sub">负责单位：{{p.department}}</view><view class="actions"><text @tap="edit(p)">编辑地点</text><text @tap="remove(p)">删除地点</text></view></view>
+ <view v-if="editing" class="shade"><view class="dialog"><view class="flex-between"><text class="dialog-title">{{form.id?'编辑归还地点':'新增归还地点'}}</text><text @tap="editing=false">关闭</text></view><scroll-view scroll-y style="max-height:65vh"><text class="field-title">地点名称</text><view class="field"><input v-model="form.name" class="field-input" placeholder="请输入真实归还点名称"/></view><text class="field-title">具体位置</text><view class="field"><input v-model="form.address" class="field-input" placeholder="例如：某栋楼一层服务台"/></view><text class="field-title">开放时间</text><view class="field"><input v-model="form.hours" class="field-input" placeholder="例如：工作日 08:00—18:00"/></view><text class="field-title">负责单位</text><view class="field"><input v-model="form.department" class="field-input" placeholder="请填写负责部门"/></view><view class="confirmed"><text>确认以上信息已经向学校核实</text><switch :checked="form.verified" color="#115740" @change="e=>form.verified=e.detail.value"/></view></scroll-view><button class="btn-primary" @tap="save">保存归还地点</button></view></view>
+ <AdminNav active="points"/>
+</view>
+</template>
+<script setup>
+import {ref} from 'vue';import {onShow} from '@dcloudio/uni-app';import AdminNav from '../../../components/AdminNav.vue';import AppIcon from '../../../components/AppIcon.vue';import {places,savePlace,removePlace,requireRole} from '../../../utils/store.js'
+const list=ref([]),editing=ref(false),form=ref({})
+onShow(()=>{if(requireRole('admin'))reload()})
+function reload(){list.value=places()}
+function addNew(){form.value={id:'',name:'',address:'',hours:'',department:'',verified:false};editing.value=true}
+function edit(p){form.value={...p};editing.value=true}
+function save(){const x=form.value;if(!x.name.trim()||!x.address.trim()||!x.hours.trim()||!x.department.trim()){uni.showToast({title:'请填写完整的归还点信息',icon:'none'});return}if(savePlace(x)){editing.value=false;reload();uni.showToast({title:'保存成功'})}}
+function remove(p){uni.showModal({title:'删除归还点',content:'如有物品使用该地点，将无法删除，请先重新分配。',success:r=>{if(!r.confirm)return;const ok=removePlace(p.id);uni.showToast({title:ok?'删除成功':'请先重新分配关联物品',icon:'none'});reload()}})}
+</script>
+<style scoped>
+.admin-title{background:#002554;padding:31rpx;color:white}.admin-title .flex-between>text{font-size:35rpx;font-weight:700}.admin-title>text{color:#c7d5e2;font-size:23rpx;margin-top:12rpx;display:block}.add-button{background:white;color:#002554;font-size:23rpx;border-radius:4rpx;padding:10rpx 17rpx}.warning{display:flex;align-items:flex-start;padding:23rpx;background:#eef4f1;gap:15rpx;font-size:23rpx;line-height:1.6;color:#476d5c}.place-card{margin:16rpx;background:white;padding:25rpx;border:1rpx solid #e2e9ef}.place-title{font-size:29rpx;font-weight:700;color:#002554;max-width:455rpx}.place-sub{font-size:23rpx;color:#6d8092;margin-top:16rpx}.actions{border-top:1rpx solid #e8edef;padding-top:20rpx;display:flex;justify-content:flex-end;gap:30rpx;margin-top:20rpx;color:#265b8a;font-size:24rpx}.actions text:last-child{color:#b4665d}.shade{position:fixed;inset:0;background:rgba(9,33,60,.48);z-index:50;display:flex;align-items:center;justify-content:center}.dialog{background:white;width:90%;padding:28rpx;max-height:84vh}.dialog-title{font-size:31rpx;color:#002554;font-weight:700}.dialog>.flex-between>text:last-child{font-size:23rpx;color:#75899c}.dialog>button{margin-top:28rpx}.confirmed{display:flex;justify-content:space-between;align-items:center;padding:24rpx 0;font-size:23rpx;color:#61788d}
+</style>

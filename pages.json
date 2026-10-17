@@ -1,0 +1,70 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/home/home",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/publish/publish",
+      "style": {
+        "navigationBarTitleText": "发布信息"
+      }
+    },
+    {
+      "path": "pages/detail/detail",
+      "style": {
+        "navigationBarTitleText": "物品详情"
+      }
+    },
+    {
+      "path": "pages/mine/mine",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/points/points",
+      "style": {
+        "navigationBarTitleText": "校园归还地点"
+      }
+    },
+    {
+      "path": "pages/admin/dashboard/dashboard",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/admin/records/records",
+      "style": {
+        "navigationBarTitleText": "信息管理"
+      }
+    },
+    {
+      "path": "pages/admin/points/points",
+      "style": {
+        "navigationBarTitleText": "归还地点管理"
+      }
+    },
+    {
+      "path": "pages/admin/users/users",
+      "style": {
+        "navigationBarTitleText": "用户管理"
+      }
+    }
+  ],
+  "globalStyle": {
+    "backgroundColor": "#f5f7f9",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "武汉大学校园失物招领",
+    "navigationBarTextStyle": "black"
+  }
+}
