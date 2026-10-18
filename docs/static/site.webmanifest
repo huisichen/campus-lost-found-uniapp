@@ -1,0 +1,17 @@
+{
+  "name": "珞珈失物招领",
+  "short_name": "珞珈失物",
+  "id": "../",
+  "start_url": "../#/",
+  "scope": "../",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/campus-lost-found-uniapp/static/branding/app-icon-reference.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
