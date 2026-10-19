@@ -1,6 +1,6 @@
 <template>
 <view class="page-body">
- <view class="mine-header"><view class="flex-between"><text class="title-white">我的</text><view @tap="signOut" class="exit"><AppIcon name="logout" :size="30"/>退出</view></view><view class="user-summary"><view class="avatar"><AppIcon name="user" :size="58"/></view><view><text class="username">{{who?.name||'同学'}}</text><text class="department">{{who?.department}} · 邮箱账号</text></view></view></view>
+ <view class="mine-header"><view class="flex-between"><text class="title-white">我的</text><view @tap="signOut" class="exit"><AppIcon name="logout" :size="30"/>退出</view></view><view class="user-summary"><view class="avatar"><AppIcon name="user" :size="58"/></view><view><text class="username">{{who?.name||'同学'}}</text><text class="department">{{who?.department}} · 体验账号</text></view></view></view>
  <view class="counts"><view><text>{{mine.length}}</text><text>我的发布</text></view><view><text>{{myClaims.length}}</text><text>我的认领</text></view><view><text>{{mine.filter(x=>x.status==='returned').length}}</text><text>已归还</text></view></view>
  <view class="mine-tabs"><view :class="tab==='posts'?'current':''" @tap="tab='posts'">我的发布</view><view :class="tab==='claims'?'current':''" @tap="tab='claims'">我的认领</view><view :class="tab==='matches'?'current':''" @tap="openMatches">匹配提醒</view></view>
  <view class="mine-content">

@@ -9,11 +9,11 @@
  <view class="login-panel">
   <view class="role-switch"><view :class="role==='user'?'chosen':''" @tap="choose('user')">用户登录</view><view :class="role==='admin'?'chosen':''" @tap="choose('admin')">管理员登录</view></view>
   <view class="login-heading">{{role==='user'?'欢迎回到校园':'管理平台身份验证'}}</view>
-  <view class="input-line"><AppIcon name="user" :size="38"/><input v-model="account" maxlength="60" placeholder="请输入邮箱"/></view>
+  <view class="input-line"><AppIcon name="user" :size="38"/><input v-model="account" maxlength="30" placeholder="请输入账号"/></view>
   <view class="input-line"><AppIcon name="lock" :size="38"/><input v-model="password" password placeholder="请输入密码"/></view>
   <button class="submit" @tap="submit">登录</button>
-  <view class="demo-hint" @tap="register"><text>首次使用？注册邮箱账号</text><text>需邮箱验证</text></view>
-  <view class="demo-tag">邮箱账号登录 · 暂未接入学校统一身份认证</view>
+  <view class="demo-hint"><text>体验账号：{{role==='user'?'20260001':'管理员'}}</text><text>密码：123456</text></view>
+  <view class="demo-tag">课程项目 · 暂未接入学校统一身份认证</view>
  </view>
  <view class="footer-note">自强 弘毅 求是 拓新</view>
 </view>
@@ -22,12 +22,11 @@
 import {ref,onMounted} from 'vue'
 import AppIcon from '../../components/AppIcon.vue'
 import SchoolLogo from '../../components/SchoolLogo.vue'
-import {login,signup,session,restoreSession,cloudEnabled} from '../../utils/store.js'
-const role=ref('user'), account=ref(''),password=ref(''),busy=ref(false)
-onMounted(async()=>{if(!session())return;try{const s=await restoreSession();if(s)uni.redirectTo({url:s.role==='admin'?'/pages/admin/dashboard/dashboard':'/pages/home/home'})}catch{}})
-function choose(r){role.value=r}
-async function submit(){if(busy.value)return;busy.value=true;try{const s=await login(role.value,account.value,password.value);if(!s)throw new Error('账号或密码错误');uni.redirectTo({url:s.role==='admin'?'/pages/admin/dashboard/dashboard':'/pages/home/home'})}catch(e){uni.showToast({title:e.message||'登录失败',icon:'none'})}finally{busy.value=false}}
-async function register(){if(!cloudEnabled){uni.showToast({title:'云端注册尚未启用',icon:'none'});return}if(!account.value.includes('@')||password.value.length<6){uni.showToast({title:'请填写邮箱和至少 6 位密码',icon:'none'});return}if(busy.value)return;busy.value=true;try{const result=await signup(account.value,password.value);uni.showModal({title:'注册申请已提交',content:result.needsConfirmation?'请查收验证邮件，确认后返回本页登录。':'账号已创建，请登录。',showCancel:false})}catch(e){uni.showToast({title:e.message||'注册失败',icon:'none'})}finally{busy.value=false}}
+import {login,session} from '../../utils/store.js'
+const role=ref('user'), account=ref('20260001'),password=ref('123456')
+onMounted(()=>{const s=session();if(s)uni.redirectTo({url:s.role==='admin'?'/pages/admin/dashboard/dashboard':'/pages/home/home'})})
+function choose(r){role.value=r;account.value=r==='admin'?'管理员':'20260001';password.value='123456'}
+function submit(){const s=login(role.value,account.value,password.value);if(!s){uni.showToast({title:'账号或密码错误',icon:'none'});return}uni.redirectTo({url:role.value==='admin'?'/pages/admin/dashboard/dashboard':'/pages/home/home'})}
 </script>
 <style scoped>
 .login-page{min-height:100vh;background:#f4f7fa;position:relative;padding-bottom:38rpx}.hero{height:470rpx;width:100%;display:block}.hero-cover{position:absolute;top:0;left:0;right:0;height:470rpx;background:linear-gradient(180deg,rgba(0,37,84,.72),rgba(0,37,84,.15))}.identity{position:absolute;top:102rpx;left:38rpx;display:flex;align-items:center;gap:17rpx;color:white}.seal{width:94rpx;height:94rpx}.school{font-size:22rpx;opacity:.9}.name{font-size:44rpx;font-weight:800;margin:3rpx 0}.slogan{font-size:24rpx;letter-spacing:2rpx}
