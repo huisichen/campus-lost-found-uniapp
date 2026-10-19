@@ -12,7 +12,7 @@ function safePushHost(endpoint) {
     )
   } catch { return false }
 }
-async function sendPush(ctx, userId, foundId, title) {
+async function sendPush(ctx, userId, foundId) {
   const vapid = await secret(ctx, 'get_web_push_vapid')
   if (!vapid?.publicKey || !vapid?.privateKey) return { delivered: 0, reason: 'not-configured' }
   const subscriptions = await service(ctx, `push_subscriptions?select=endpoint,p256dh,auth_key&user_id=eq.${encodeURIComponent(userId)}&limit=10`)
@@ -22,13 +22,13 @@ async function sendPush(ctx, userId, foundId, title) {
     try {
       const success = await sendPushNotification(
         { endpoint: item.endpoint, keys: { p256dh: item.p256dh, auth: item.auth_key } },
-        { title: '失物招领匹配提醒', body: `${title} 发现可能对应的物品，请进入“匹配提醒”核实。`,
+        { title: '失物招领匹配提醒', body: '有一条新的匹配线索，请进入“匹配提醒”核实。',
           url: `https://huisichen.github.io/campus-lost-found-uniapp/#/pages/mine/mine`, tag: `match-${foundId}` },
         vapid, { ttl: 86400, timeoutMs: 8000 }
       )
       if (success) delivered++
       else await service(ctx, `push_subscriptions?endpoint=eq.${encodeURIComponent(item.endpoint)}`, { method: 'DELETE' })
-    } catch { /* Persisted in-app notification still remains available. */ }
+    } catch (error) { console.warn('Web Push delivery failed', error?.statusCode || 'network') }
   }
   return { delivered }
 }
@@ -50,7 +50,6 @@ Deno.serve(async request => {
     if (!candidates.length) return json({ matches: [], notifications: 0 }, 200, origin)
     const toItem = row => ({ id: row.id, title: row.title, category: row.category, location: row.location,
       description: row.description, image: row.category === '证件卡类' ? '' : row.image })
-    const lost = post.kind === 'lost' ? post : candidates[0]
     const found = post.kind === 'found' ? post : null
     // When the newly approved item is found, each lost post is checked separately.
     const batches = post.kind === 'lost' ? [{ lost: post, found: candidates }] : candidates.map(row => ({ lost: row, found: [found] }))
@@ -70,7 +69,7 @@ Deno.serve(async request => {
             data: { user_id: userId, lost_id: batch.lost.id, found_id: foundRow.id, score: match.score, reason: match.reason }
           })
           if (inserted?.length) {
-            const push = await sendPush(ctx, userId, foundRow.id, batch.lost.title)
+            const push = await sendPush(ctx, userId, foundRow.id)
             created.push({ lostId: batch.lost.id, foundId: foundRow.id, userId, pushDelivered: push.delivered })
           }
         }

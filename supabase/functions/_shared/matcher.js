@@ -15,6 +15,7 @@ function scrub(value, max) {
   return String(value || '').slice(0, max)
     .replace(/\b1[3-9]\d{9}\b/g, '[手机号已省略]')
     .replace(/\b\d{15}(?:\d{2}[0-9Xx])?\b/g, '[证件号已省略]')
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[邮箱已省略]')
 }
 
 function item(value) {
