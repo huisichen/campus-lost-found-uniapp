@@ -11,12 +11,12 @@
 </template>
 <script setup>
 import {ref,computed} from 'vue';import {onLoad} from '@dcloudio/uni-app';import AppIcon from '../../components/AppIcon.vue';import ItemRow from '../../components/ItemRow.vue'
-import {findPost,STATUS,session,places,publishedPosts,requestClaim} from '../../utils/store.js'
+import {findPost,STATUS,session,places,publishedPosts,requestClaim,refreshCloud} from '../../utils/store.js'
 const item=ref(null),claimNote=ref(''),ownId=ref(''),currentRole=ref(''),points=ref([])
-onLoad(o=>{item.value=findPost(o.id);ownId.value=session()?.id||'';currentRole.value=session()?.role||'';points.value=places()})
+onLoad(async o=>{try{await refreshCloud()}catch{}item.value=findPost(o.id);ownId.value=session()?.id||'';currentRole.value=session()?.role||'';points.value=places()})
 const selectedPoint=computed(()=>points.value.find(x=>x.id===item.value?.pointId))
 const matches=computed(()=>{if(!item.value)return[];const p=item.value;return publishedPosts().filter(x=>x.id!==p.id&&x.kind!==p.kind&&x.category===p.category&&x.status==='approved').map(x=>({...x,rank:(x.location===p.location?2:0)+((x.title===p.title||x.title.includes(p.title)||p.title.includes(x.title))?2:0)})).sort((a,b)=>b.rank-a.rank).slice(0,2)})
-function claim(){if(!claimNote.value.trim()){uni.showToast({title:'请先填写可核实特征',icon:'none'});return}const ok=requestClaim(item.value.id,claimNote.value.trim());uni.showToast({title:ok?'认领申请已提交':'无法重复申请或状态已变更',icon:'none'});if(ok)claimNote.value=''}
+async function claim(){if(!claimNote.value.trim()){uni.showToast({title:'请先填写可核实特征',icon:'none'});return}try{const ok=await requestClaim(item.value.id,claimNote.value.trim());uni.showToast({title:ok?'认领申请已提交':'无法重复申请或状态已变更',icon:'none'});if(ok)claimNote.value=''}catch(e){uni.showToast({title:e.message||'提交失败',icon:'none'})}}
 </script>
 <style scoped>
 .detail-page{padding-bottom:70rpx}.cover{width:100%;height:430rpx;background:#e4ebf1}.detail-top,.info,.description,.claim-block,.related{background:#fff;margin-bottom:15rpx;padding:26rpx}.main-name{font-size:37rpx;color:#002554;font-weight:750}.kind{font-size:23rpx;padding:8rpx 15rpx;color:white}.lost{background:#c76543}.found{background:#15815b}.tags{display:flex;gap:14rpx;margin-top:16rpx}.tags text{font-size:22rpx;background:#edf1f5;color:#5f768c;padding:7rpx 11rpx}.info>view{display:flex;align-items:center;justify-content:space-between;padding:22rpx 0;border-bottom:1rpx solid #f0f2f5;font-size:26rpx}.info>view text:first-child{color:#8090a0}.info>view text:last-child{color:#263f57;max-width:510rpx;text-align:right}.description view{color:#002554;font-size:29rpx;font-weight:700;margin-bottom:20rpx}.description text{line-height:1.8;color:#546c80;font-size:27rpx}.privacy{display:flex;align-items:start;gap:12rpx;margin:16rpx;padding:18rpx 22rpx;background:#e9f3ee;color:#557365;font-size:23rpx;line-height:1.6}.claim-block textarea{border:1rpx solid #d9e5ed;margin:20rpx 0;padding:20rpx;width:100%;height:170rpx;font-size:25rpx}.claim-block button{margin-top:18rpx}.rule-note{font-size:22rpx;color:#7c8b99;display:block;line-height:1.6;margin-top:15rpx}

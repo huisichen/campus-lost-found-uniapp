@@ -14,7 +14,7 @@
  </view>
  <view v-if="isDocument" class="form-section">
   <text class="form-heading">证件信息保护</text>
-  <view class="protect"><AppIcon name="shield" :size="40"/><text>姓名仅公开第一个字，其余用星号遮挡；证件号码仅公开首尾字符。原始内容不会存入本机记录。</text></view>
+  <view class="protect"><AppIcon name="shield" :size="40"/><text>姓名仅公开第一个字，其余用星号遮挡；证件号码仅公开首尾字符。原始内容不会保存。</text></view>
   <text class="field-title">证件姓名（仅用于本次自动脱敏）</text><view class="field"><input class="field-input" v-model="holderName" maxlength="30" placeholder="如：张小明，公开后显示张**"/></view>
   <text class="field-title">证件号码（仅用于本次自动脱敏）</text><view class="field"><input class="field-input" v-model="documentNo" maxlength="24" placeholder="公开页面仅显示首尾字符"/></view>
   <view class="preview"><text>公开效果：</text><text>{{maskName(holderName)||'姓**'}}　{{maskDocument(documentNo)||'首********尾'}}</text></view>
@@ -23,8 +23,8 @@
  <view v-else class="form-section">
   <text class="form-heading">物品照片</text>
   <view class="upload-row" @tap="selectImage"><image v-if="photo" :src="photo" mode="aspectFill"/><view v-else><AppIcon name="camera" :size="49"/><text>拍照或从相册选择</text></view></view>
-  <text class="note">{{aiAvailable?'可选填，请勿上传证件照片。照片保存在本机；使用匹配提醒时，照片和文字会发送至 DeepSeek 分析。':'可选填，建议上传清晰的物品照片。当前数据仅保存在本机，不会上传至服务器。'}}</text>
-  <view class="recognition" @tap="runRecognition"><AppIcon name="image" :size="30"/><text>尝试图片识别</text><text class="dim">（服务待接入）</text></view>
+  <text class="note">{{aiAvailable?'可选填，请勿上传证件照片。提交后照片将保存至云端，并用于图文匹配。':'可选填，建议上传清晰的物品照片。当前数据仅保存在本机。'}}</text>
+  <view class="recognition" @tap="runRecognition"><AppIcon name="image" :size="30"/><text>尝试图片识别</text><text class="dim">{{aiAvailable?'（AI 辅助填写）':'（服务待接入）'}}</text></view>
  </view>
  <view v-if="kind==='found'" class="form-section">
   <text class="form-heading">归还地点</text>
@@ -32,23 +32,23 @@
   <picker :range="pointNames" :value="pointIndex" @change="e=>pointIndex=Number(e.detail.value)"><view class="field point-field">{{pointNames[pointIndex]}}<text class="pick-arrow">⌄</text></view></picker>
  </view>
  <view class="footer-actions"><button class="btn-outline" @tap="cancel">取消</button><button class="btn-primary" :disabled="saving" @tap="submit">提交审核</button></view>
- <view class="bottom-note">发布后由管理员审核，通过后在大厅展示。{{aiAvailable?'匹配提醒需打开页面查看；暂不支持后台远程推送。':'当前版本暂无真正的图像识别和消息推送服务。'}}</view>
+ <view class="bottom-note">发布后由管理员审核，通过后在大厅展示。{{aiAvailable?'匹配成功后可在“我的”查看；支持的浏览器授权后可收到后台提醒。':'当前版本暂无真正的图像识别和消息推送服务。'}}</view>
 </view>
 </template>
 <script setup>
 import {ref,computed} from 'vue';import {onLoad} from '@dcloudio/uni-app';import AppIcon from '../../components/AppIcon.vue'
-import {CATEGORIES,LOST_AREAS,publish,places,maskName,maskDocument,requireRole} from '../../utils/store.js'
+import {CATEGORIES,LOST_AREAS,publish,places,maskName,maskDocument,requireRole,refreshCloud} from '../../utils/store.js'
 import {recognizeItemImage,aiAvailable} from '../../utils/ai-service.js'
 const kind=ref('lost'),categories=CATEGORIES,categoryIndex=ref(0),areas=LOST_AREAS,areaIndex=ref(0),title=ref(''),description=ref(''),holderName=ref(''),documentNo=ref(''),photo=ref(''),saving=ref(false),pointIndex=ref(0),points=ref([])
 const isDocument=computed(()=>CATEGORIES[categoryIndex.value]==='证件卡类')
 const pointNames=computed(()=>['暂不指定，由管理员安排',...points.value.map(p=>p.name)])
-onLoad(opts=>{kind.value=opts.kind==='found'?'found':'lost';if(requireRole('user'))points.value=places()})
+onLoad(async opts=>{kind.value=opts.kind==='found'?'found':'lost';if(requireRole('user')){try{await refreshCloud();points.value=places()}catch{points.value=[]}}})
 function changeCategory(e){categoryIndex.value=Number(e.detail.value);if(isDocument.value)photo.value=''}
 function selectImage(){uni.chooseImage({count:1,sizeType:['compressed'],sourceType:['camera','album'],success:r=>{const file=r.tempFilePaths[0];uni.saveFile({tempFilePath:file,success:res=>{photo.value=res.savedFilePath},fail:()=>{photo.value=file;uni.showToast({title:'图片为临时文件，重启后可能失效',icon:'none'})}})},fail:()=>{}})}
-async function runRecognition(){try{await recognizeItemImage(photo.value)}catch(e){uni.showModal({title:'图片识别',content:e.message,showCancel:false})}}
+async function runRecognition(){try{const result=await recognizeItemImage(photo.value);const index=CATEGORIES.indexOf(result.category);if(index>=0)categoryIndex.value=index;if(result.title)title.value=result.title;if(result.description)description.value=result.description;uni.showToast({title:'已填入识别结果，请核对',icon:'none'})}catch(e){uni.showModal({title:'图片识别',content:e.message,showCancel:false})}}
 function cancel(){uni.navigateBack()}
-function submit(){if(!title.value.trim()){uni.showToast({title:'请输入物品名称',icon:'none'});return}if(saving.value)return;saving.value=true
- try{publish({kind:kind.value,title:title.value.trim(),category:categories[categoryIndex.value],location:areas[areaIndex.value],description:description.value.trim(),image:isDocument.value?'':photo.value,holderName:isDocument.value?holderName.value:'',documentNo:isDocument.value?documentNo.value:'',pointId:kind.value==='found'&&pointIndex.value>0?points.value[pointIndex.value-1].id:''});
+async function submit(){if(!title.value.trim()){uni.showToast({title:'请输入物品名称',icon:'none'});return}if(saving.value)return;saving.value=true
+ try{await publish({kind:kind.value,title:title.value.trim(),category:categories[categoryIndex.value],location:areas[areaIndex.value],description:description.value.trim(),image:isDocument.value?'':photo.value,holderName:isDocument.value?holderName.value:'',documentNo:isDocument.value?documentNo.value:'',pointId:kind.value==='found'&&pointIndex.value>0?points.value[pointIndex.value-1].id:''});
  holderName.value='';documentNo.value='';uni.showModal({title:'提交成功',content:'信息已进入待审核列表，可在“我的发布”中查看。',showCancel:false,success:()=>uni.redirectTo({url:'/pages/mine/mine'})})
  }catch(e){uni.showToast({title:e.message||'提交失败',icon:'none'})}finally{saving.value=false}}
 </script>

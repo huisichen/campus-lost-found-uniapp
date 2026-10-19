@@ -19,10 +19,10 @@
 <script setup>
 import {ref,computed,onMounted,onUnmounted} from 'vue'
 import SchoolLogo from '../../components/SchoolLogo.vue';import UserNav from '../../components/UserNav.vue';import AppIcon from '../../components/AppIcon.vue';import ItemRow from '../../components/ItemRow.vue'
-import {CATEGORIES,categoryIcon,publishedPosts,requireRole} from '../../utils/store.js'
+import {CATEGORIES,categoryIcon,publishedPosts,requireRole,refreshCloud} from '../../utils/store.js'
 const categories=['全部分类',...CATEGORIES];const active=ref('home'),selectedCat=ref('全部分类'),query=ref(''),items=ref([])
 const filtered=computed(()=>items.value.filter(p=>(active.value==='home'||p.kind===active.value)&&(selectedCat.value==='全部分类'||p.category===selectedCat.value)&&(!query.value||[p.title,p.description,p.location,p.category].join(' ').includes(query.value.trim()))))
-function reload(){items.value=publishedPosts()}
+async function reload(){try{await refreshCloud();items.value=publishedPosts()}catch(e){uni.showToast({title:e.message||'刷新失败',icon:'none'})}}
 function searchGo(){reload()}
 function setActive(v){active.value=v}
 function toPublish(kind){uni.navigateTo({url:'/pages/publish/publish?kind='+kind})}

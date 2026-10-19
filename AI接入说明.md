@@ -1,23 +1,19 @@
-# DeepSeek 图文匹配接入状态
+# DeepSeek 与推送接入说明
 
-当前 GitHub Pages 页面保持原 UI 和原规则匹配。Supabase `ai-match` Edge Function 已部署，但网页中的 AI 开关保持关闭，因为项目的匿名登录尚未启用；不能把公开的 DeepSeek 密钥写进 H5 包来绕过这一步。
+现有 UI 的结构、颜色、图标及 CSS 未改。仅修正了“本机保存”“服务待接入”等事实提示，并把原有入口接到真实服务。
 
-## 已完成
+## 服务端
 
-- 后端使用 DeepSeek `deepseek-flash` 对一条丢失物品和最多五条同类拾取物品的文字、照片进行比较，只有置信度达到阈值的候选才返回。
-- DeepSeek 密钥保存在 Supabase Vault。网页及 GitHub 只包含可公开的 Supabase 地址和 publishable key。
-- 证件类只使用已脱敏文字，不发送证件照片；服务端额外过滤常见手机号和证件号。
-- 接口验证登录令牌，每个登录身份每天最多调用十次；仅允许本站来源，限制请求体与图片大小。
-- “我的 → 匹配提醒”使用现有列表显示匹配。App 运行期间可尝试本地通知，H5 可尝试浏览器通知；均不等于后台远程推送。
-- 保留原规则匹配作为 AI 未启用或失败时的回退。页面布局、样式、图标和模块未更改。
+Supabase 项目 `gfmcllytyanpinnzgqec` 已部署 `ai-recognize`（照片分类与描述）和 `ai-process`（审核后的图文匹配、站内通知与 Web Push）两个需要有效用户 JWT 的 Edge Functions。原 `ai-match` 保留但当前页面不再直接提交任意候选数据。数据库迁移在 `supabase/migrations/202610190001_cloud_core.sql` 至 `202610190004_revoke_trigger_rpc.sql`。
 
-## 启用条件
+邮箱验证开启，匿名登录关闭。第一个管理员邮箱仅在数据库许可名单，不在仓库。管理员需自己注册并点击验证邮件；验证后重新登录，JWT 才会带管理员角色。后台权限由 RLS 和 Edge Function 双重校验。
 
-1. 在 Supabase 项目 `gfmcllytyanpinnzgqec` 的 Auth → Providers 中启用 Anonymous Sign-Ins，并考虑开启 CAPTCHA 防止滥用。当前用户选择暂不启用。
-2. 用真实账号与图片完成一次端到端测试。确认数据使用范围和隐私告知。
-3. 构建时设置 `VITE_SUPABASE_URL`、`VITE_SUPABASE_PUBLISHABLE_KEY` 及 `VITE_AI_ENABLED=true`；可参考 `.env.example`。这些都是公开客户端配置，不包含 DeepSeek 密钥。
-4. 若要不同设备之间匹配及手机后台推送，还必须把现有本机体验账号、发布记录和审核流程迁到带权限控制的共享数据库，并配置 UniPush 或其他推送服务。当前版本尚未实现这两项。
+DeepSeek API 密钥与 Web Push VAPID 私钥保存在 Supabase Vault。若之前的 API 密钥曾在聊天或其他地方明文传播，建议在 DeepSeek 控制台轮换，然后只更新 Vault 中的值。
 
-## 验证
+## Web Push 条件
 
-`node tests/store.test.mjs` 和 `node tests/ai-match.test.mjs` 检查原有业务逻辑、请求校验、证件照片排除、密钥隔离、调用额度与结果清洗。真正的 DeepSeek 调用及通知到达需要启用登录后再做端到端验证。
+用户登录后点击“我的 → 匹配提醒”，浏览器请求通知权限，注册根目录 `sw.js`，并把订阅保存到 `push_subscriptions`。只有新匹配写入站内通知时才发送推送；已失效订阅会清理。支持的浏览器与系统条件见[WebKit 的 iOS Web Push 说明](https://webkit.org/blog/13878/)及[Web Push 库文档](https://github.com/MMMikeM/web-push)。安卓原生 App 需要另行完成 DCloud UniPush 2.0 配置和实机测试。
+
+## 当前验证状态
+
+本地逻辑测试和 H5 编译已通过；数据库已部署，服务端密钥存在性已检查。由于线上尚无已验证账号、真实物品和设备推送订阅，**尚未完成真实 DeepSeek 调用、跨设备通知送达和安卓原生推送实机验收**。不能把这些未验收项目描述为已验证成功。

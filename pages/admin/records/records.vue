@@ -6,15 +6,15 @@
   <view v-if="p.kind==='found'" class="point-picker"><text>归还点</text><picker :range="pointNames" :value="pointValue(p.pointId)" @change="e=>assignPoint(p,Number(e.detail.value))"><view>{{pointLabel(p.pointId)}} ⌄</view></picker></view>
   <view class="buttons"><button v-if="p.status==='pending'" class="btn-green" @tap="action(p,'approved')">审核通过</button><button v-if="p.status==='pending'" class="btn-outline" @tap="action(p,'rejected')">不予通过</button><button v-if="p.status==='approved'" class="btn-green" @tap="action(p,'returned')">确认已归还</button><button class="btn-light" @tap="open(p.id)">查看详情</button></view>
  </view><view v-if="!filtered.length" class="no-data">当前没有相关记录。</view></view>
- <view v-else class="record-list"><view v-for="c in requestList" :key="c.id" class="record"><view class="flex-between"><text class="record-title">{{itemLabel(c.postId)}}</text><text class="pill" :class="c.status==='pending'?'pill-wait':''">{{CLAIM_STATUS[c.status]}}</text></view><view class="record-meta">申请人：{{c.userName}}　·　{{c.createdAt}}</view><view class="record-desc">申请说明：{{c.note}}</view><view v-if="c.status==='pending'" class="buttons"><button class="btn-green" @tap="claimAction(c,'approved')">核实通过</button><button class="btn-outline" @tap="claimAction(c,'rejected')">驳回申请</button></view><view v-else class="record-meta">审核记录已保存至当前设备</view></view><view v-if="!requestList.length" class="no-data">当前没有认领申请。</view></view>
+ <view v-else class="record-list"><view v-for="c in requestList" :key="c.id" class="record"><view class="flex-between"><text class="record-title">{{itemLabel(c.postId)}}</text><text class="pill" :class="c.status==='pending'?'pill-wait':''">{{CLAIM_STATUS[c.status]}}</text></view><view class="record-meta">申请人：{{c.userName}}　·　{{c.createdAt}}</view><view class="record-desc">申请说明：{{c.note}}</view><view v-if="c.status==='pending'" class="buttons"><button class="btn-green" @tap="claimAction(c,'approved')">核实通过</button><button class="btn-outline" @tap="claimAction(c,'rejected')">驳回申请</button></view><view v-else class="record-meta">审核记录已保存至云端</view></view><view v-if="!requestList.length" class="no-data">当前没有认领申请。</view></view>
  <AdminNav active="records"/>
 </view>
 </template>
 <script setup>
-import {ref,computed} from 'vue';import {onShow} from '@dcloudio/uni-app';import AdminNav from '../../../components/AdminNav.vue';import {posts,claims,places,editPost,setClaimStatus,STATUS,CLAIM_STATUS,requireRole} from '../../../utils/store.js'
+import {ref,computed} from 'vue';import {onShow} from '@dcloudio/uni-app';import AdminNav from '../../../components/AdminNav.vue';import {posts,claims,places,editPost,setClaimStatus,STATUS,CLAIM_STATUS,requireRole,refreshCloud} from '../../../utils/store.js'
 const tab=ref('pending'),all=ref([]),requests=ref([]),points=ref([])
 onShow(reload)
-function reload(){if(!requireRole('admin'))return;all.value=posts();requests.value=claims();points.value=places()}
+async function reload(){if(!requireRole('admin'))return;try{await refreshCloud();all.value=posts();requests.value=claims();points.value=places()}catch(e){uni.showToast({title:e.message||'加载失败',icon:'none'})}}
 const filtered=computed(()=>tab.value==='pending'?all.value.filter(x=>x.status==='pending'):all.value)
 const requestList=computed(()=>requests.value)
 const pendingCount=computed(()=>all.value.filter(x=>x.status==='pending').length)
@@ -22,10 +22,10 @@ const pendingClaims=computed(()=>requests.value.filter(x=>x.status==='pending').
 const pointNames=computed(()=>['待指定',...points.value.map(p=>p.name)])
 function pointValue(id){return Math.max(0,points.value.findIndex(x=>x.id===id)+1)}
 function pointLabel(id){return points.value.find(x=>x.id===id)?.name||'待指定'}
-function assignPoint(p,index){const id=index>0?points.value[index-1].id:'';if(editPost(p.id,{pointId:id})){reload();uni.showToast({title:'归还点已更新'})}}
+async function assignPoint(p,index){const id=index>0?points.value[index-1].id:'';try{if(await editPost(p.id,{pointId:id})){await reload();uni.showToast({title:'归还点已更新'})}}catch(e){uni.showToast({title:e.message||'更新失败',icon:'none'})}}
 function itemLabel(id){return all.value.find(x=>x.id===id)?.title||'未找到对应物品'}
-function action(p,status){const msg=status==='approved'?'审核通过后将对用户公开。':status==='returned'?'确认物品已经线下交还本人？':'驳回后该信息不再公开。';uni.showModal({title:status==='returned'?'归还确认':'信息审核',content:msg,success:r=>{if(r.confirm){editPost(p.id,{status});reload()}}})}
-function claimAction(c,status){uni.showModal({title:'认领核实',content:'请确保已线下核验物品归属。此操作仅记录审核结果，不自动认定物品完成交接。',success:r=>{if(r.confirm){setClaimStatus(c.id,status);reload()}}})}
+function action(p,status){const msg=status==='approved'?'审核通过后将对用户公开并尝试智能匹配。':status==='returned'?'确认物品已经线下交还本人？':'驳回后该信息不再公开。';uni.showModal({title:status==='returned'?'归还确认':'信息审核',content:msg,success:async r=>{if(!r.confirm)return;try{await editPost(p.id,{status});await reload()}catch(e){await reload();uni.showToast({title:e.message||'匹配暂未完成，请稍后重试',icon:'none'})}}})}
+function claimAction(c,status){uni.showModal({title:'认领核实',content:'请确保已线下核验物品归属。此操作仅记录审核结果，不自动认定物品完成交接。',success:async r=>{if(!r.confirm)return;try{await setClaimStatus(c.id,status);await reload()}catch(e){uni.showToast({title:e.message||'处理失败',icon:'none'})}}})}
 function open(id){uni.navigateTo({url:'/pages/detail/detail?id='+id})}
 </script>
 <style scoped>

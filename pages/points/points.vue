@@ -7,8 +7,8 @@
 </view>
 </template>
 <script setup>
-import {ref} from 'vue';import {onShow} from '@dcloudio/uni-app';import AppIcon from '../../components/AppIcon.vue';import {places} from '../../utils/store.js'
-const list=ref([]);onShow(()=>list.value=places())
+import {ref} from 'vue';import {onShow} from '@dcloudio/uni-app';import AppIcon from '../../components/AppIcon.vue';import {places,refreshCloud} from '../../utils/store.js'
+const list=ref([]);onShow(async()=>{try{await refreshCloud();list.value=places()}catch(e){uni.showToast({title:e.message||'加载失败',icon:'none'})}})
 </script>
 <style scoped>
 .points-page{min-height:100vh}.intro{display:flex;background:#002554;color:#fff;align-items:center;padding:33rpx 29rpx;gap:19rpx}.intro>view{display:flex;flex-direction:column;gap:8rpx}.intro text:first-child{font-size:34rpx;font-weight:700}.intro text:last-child{font-size:23rpx;color:#e4eaf0}.notice{background:#fff7ec;color:#a67430;font-size:23rpx;padding:19rpx 26rpx;line-height:1.65}.point-row{background:white;margin-top:12rpx;padding:30rpx;border-bottom:1rpx solid #e3ebef}.point-name{font-size:30rpx;font-weight:700;color:#173754}.point-row>view:not(:first-child){display:flex;align-items:center;gap:12rpx;font-size:24rpx;color:#738499;margin-top:21rpx}

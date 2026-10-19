@@ -1,4 +1,8 @@
-// 本机数据层。不可用作正式的身份认证、个人信息存储或权限控制。
+// Local fixtures remain for offline tests; production uses authenticated cloud records.
+import {cloudEnabled, cloudLogin, cloudSignup, cloudRestore, cloudLogout, cachedIdentity, table, callFunction, mapPost, mapClaim, mapPoint} from './cloud.js'
+import {imageDataUrl} from './photo.js'
+export {cloudEnabled}
+const cloudState={posts:[],claims:[],places:[],profiles:[],notifications:[]}
 export const CATEGORIES = ['证件卡类','电子数码','包袋衣物','生活用品','学习用品','钥匙卡类','其他']
 export const LOST_AREAS = ['图书馆周边','教学楼区域','食堂周边','宿舍区域','体育场馆','校园道路','其他地点']
 export const DEMO_ACCOUNTS = [
@@ -19,6 +23,7 @@ export function publicPost(p){if(!p)return null;const data={...p};if(data.catego
 function maskIfNotMasked(a){return a&&a.includes('*')?a:maskName(a)}
 function maskIfDocumentNotMasked(a){return a&&a.includes('*')?a:maskDocument(a)}
 export function initialize(){
+ if(cloudEnabled)return
  if(get(K.init,false))return
  const points=[
   {id:'p1',name:'示例归还点一（待核实）',address:'请管理员填写学校实际地点',hours:'开放时间待核实',department:'负责人待配置',verified:false},
@@ -37,30 +42,77 @@ export function initialize(){
  ]
  put(K.points,points);put(K.posts,posts);put(K.claims,[]);put(K.init,true)
 }
-export function login(role,account,password){initialize();const a=DEMO_ACCOUNTS.find(x=>x.role===role&&x.account===account.trim()&&x.password===password);if(!a)return null;const s={id:a.id,name:a.name,role:a.role,department:a.department,account:a.account};put(K.session,s);return s}
-export function session(){return get(K.session,null)}
-export function logout(){try{uni.removeStorageSync(K.session)}catch(e){} }
+export function login(role,account,password){if(cloudEnabled)return cloudLogin(account,password).then(async s=>{if(s.role===role)return s;await cloudLogout();throw new Error('此账号没有所选身份的权限')});initialize();const a=DEMO_ACCOUNTS.find(x=>x.role===role&&x.account===account.trim()&&x.password===password);if(!a)return null;const s={id:a.id,name:a.name,role:a.role,department:a.department,account:a.account};put(K.session,s);return s}
+export function signup(account,password){if(!cloudEnabled)throw new Error('云端注册尚未启用');return cloudSignup(account,password)}
+export function restoreSession(){return cloudEnabled?cloudRestore():Promise.resolve(session())}
+export function session(){return cloudEnabled?cachedIdentity():get(K.session,null)}
+export function logout(){if(cloudEnabled){Object.keys(cloudState).forEach(k=>cloudState[k]=[]);return cloudLogout()}try{uni.removeStorageSync(K.session)}catch(e){} }
 export function requireRole(role){const s=session();if(!s||s.role!==role){uni.reLaunch({url:'/pages/login/login'});return false}return true}
-export function posts(){initialize();return get(K.posts,[]).map(publicPost).sort((a,b)=>b.createdAt.localeCompare(a.createdAt))}
+export async function refreshCloud(){
+ if(!cloudEnabled)return
+ const current=session();if(!current)throw new Error('请先登录')
+ const [postRows,claimRows,pointRows]=await Promise.all([
+  table('posts',{query:'?select=*&order=created_at.desc&limit=300'}),
+  table('claims',{query:'?select=*&order=created_at.desc&limit=300'}),
+  table('return_points',{query:'?select=*&order=name.asc'})
+ ])
+ cloudState.posts=postRows.map(mapPost).map(publicPost)
+ cloudState.claims=claimRows.map(mapClaim)
+ cloudState.places=pointRows.map(mapPoint)
+}
+export function posts(){if(cloudEnabled)return cloudState.posts;initialize();return get(K.posts,[]).map(publicPost).sort((a,b)=>b.createdAt.localeCompare(a.createdAt))}
 export function findPost(id){return posts().find(p=>p.id===id)||null}
 export function publishedPosts(){return posts().filter(p=>['approved','returned'].includes(p.status))}
 export function publish(input){initialize();const s=session();if(!s||s.role!=='user')throw Error('请先登录用户账号');
+ if(cloudEnabled)return cloudPublish(input,s)
  const clean={...input};if(clean.category==='证件卡类'){clean.holderName=maskName(clean.holderName);clean.documentNo=maskDocument(clean.documentNo);clean.image=''}
  const p={id:`r${Date.now()}`,ownerId:s.id,ownerName:s.name,createdAt:dateTime(),status:'pending',pointId:'',...clean};
  // 白名单存储，避免意外将上传文件的临时路径、身份证原文等写入缓存。
  const safe={id:p.id,ownerId:p.ownerId,ownerName:p.ownerName,createdAt:p.createdAt,status:'pending',pointId:p.pointId||'',kind:p.kind,title:p.title,category:p.category,location:p.location,description:p.description||'',image:p.image||'',holderName:p.holderName||'',documentNo:p.documentNo||''}
  put(K.posts,[safe,...get(K.posts,[])]);return publicPost(safe)
 }
-export function editPost(id,patch){initialize();const s=session();const arr=get(K.posts,[]),i=arr.findIndex(p=>p.id===id);if(i<0)return false;const before=arr[i];if(!s||!(s.role==='admin'||(before.ownerId===s.id&&['closed'].includes(patch.status))))return false;
+async function cloudPublish(input,s){
+ const clean={...input}
+ if(clean.category==='证件卡类'){clean.holderName=maskName(clean.holderName);clean.documentNo=maskDocument(clean.documentNo);clean.image=''}
+ else clean.image=await imageDataUrl(clean.image)
+ const row={id:`r${Date.now()}${Math.random().toString(36).slice(2,8)}`,owner_id:s.id,owner_name:s.name,
+  kind:clean.kind,title:clean.title,category:clean.category,location:clean.location,
+  description:clean.description||'',image:clean.image||'',holder_name:clean.holderName||'',document_no:clean.documentNo||'',
+  point_id:clean.kind==='found'&&clean.pointId?clean.pointId:null,status:'pending'}
+ const result=await table('posts',{method:'POST',data:row,prefer:'return=representation'})
+ await refreshCloud()
+ return publicPost(mapPost(result[0]))
+}
+export function editPost(id,patch){initialize();const s=session();if(cloudEnabled)return s?cloudEditPost(id,patch,s):false;const arr=get(K.posts,[]),i=arr.findIndex(p=>p.id===id);if(i<0)return false;const before=arr[i];if(!s||!(s.role==='admin'||(before.ownerId===s.id&&['closed'].includes(patch.status))))return false;
  const allowed=s.role==='admin'?['status','pointId','returnedAt']:['status'];for(const key of allowed){if(patch[key]!==undefined)before[key]=patch[key]};if(before.status==='returned'&&!before.returnedAt)before.returnedAt=dateTime();put(K.posts,arr);return true}
-export function places(){initialize();return get(K.points,[])}
-export function savePlace(data){initialize();if(session()?.role!=='admin')return false;const arr=places();const index=arr.findIndex(x=>x.id===data.id);const place={id:data.id||`p${Date.now()}`,name:data.name,address:data.address,hours:data.hours,department:data.department,verified:!!data.verified};if(index<0)arr.push(place);else arr[index]=place;put(K.points,arr);return true}
-export function removePlace(id){if(session()?.role!=='admin')return false;const arr=places();if(posts().some(p=>p.pointId===id))return false;put(K.points,arr.filter(p=>p.id!==id));return true}
-export function claims(){initialize();return get(K.claims,[])}
+async function cloudEditPost(id,patch,s){
+ const allowed=s.role==='admin'?['status','pointId']:['status']
+ const data={};if(allowed.includes('status')&&patch.status)data.status=patch.status
+ if(allowed.includes('pointId')&&patch.pointId!==undefined)data.point_id=patch.pointId||null
+ if(!Object.keys(data).length)return false
+ const result=await table('posts',{method:'PATCH',query:`?id=eq.${encodeURIComponent(id)}&select=id`,data,prefer:'return=representation'})
+ if(!result.length)return false
+ await refreshCloud()
+ if(patch.status==='approved'&&s.role==='admin')await callFunction('ai-process',{postId:id})
+ return true
+}
+export function places(){if(cloudEnabled)return cloudState.places;initialize();return get(K.points,[])}
+export function savePlace(data){initialize();if(session()?.role!=='admin')return false;if(cloudEnabled)return cloudSavePlace(data);const arr=places();const index=arr.findIndex(x=>x.id===data.id);const place={id:data.id||`p${Date.now()}`,name:data.name,address:data.address,hours:data.hours,department:data.department,verified:!!data.verified};if(index<0)arr.push(place);else arr[index]=place;put(K.points,arr);return true}
+async function cloudSavePlace(data){const row={id:data.id||`p${Date.now()}`,name:data.name,address:data.address,hours:data.hours,department:data.department,verified:!!data.verified};await table('return_points',{method:'POST',query:'?on_conflict=id',data:row,prefer:'resolution=merge-duplicates,return=representation'});await refreshCloud();return true}
+export function removePlace(id){if(session()?.role!=='admin')return false;if(cloudEnabled)return cloudRemovePlace(id);const arr=places();if(posts().some(p=>p.pointId===id))return false;put(K.points,arr.filter(p=>p.id!==id));return true}
+async function cloudRemovePlace(id){if(posts().some(p=>p.pointId===id))return false;await table('return_points',{method:'DELETE',query:`?id=eq.${encodeURIComponent(id)}`});await refreshCloud();return true}
+export function claims(){if(cloudEnabled)return cloudState.claims;initialize();return get(K.claims,[])}
 export function requestClaim(postId,note){initialize();const s=session(),p=findPost(postId);if(!s||s.role!=='user'||!p||p.kind!=='found'||p.ownerId===s.id||p.status!=='approved')return false;
+ if(cloudEnabled)return cloudClaim(postId,note,s)
  if(claims().some(c=>c.userId===s.id&&c.postId===postId&&c.status!=='rejected'))return false;
  put(K.claims,[{id:`c${Date.now()}`,postId,userId:s.id,userName:s.name,note:note.slice(0,140),status:'pending',createdAt:dateTime()},...claims()]);return true}
-export function setClaimStatus(id,status){if(session()?.role!=='admin')return false;const arr=claims();const c=arr.find(x=>x.id===id);if(!c)return false;c.status=status;put(K.claims,arr);return true}
+async function cloudClaim(postId,note,s){await table('claims',{method:'POST',data:{id:`c${Date.now()}${Math.random().toString(36).slice(2,8)}`,post_id:postId,user_id:s.id,user_name:s.name,note:note.slice(0,140),status:'pending'}});await refreshCloud();return true}
+export function setClaimStatus(id,status){if(session()?.role!=='admin')return false;if(cloudEnabled)return cloudSetClaimStatus(id,status);const arr=claims();const c=arr.find(x=>x.id===id);if(!c)return false;c.status=status;put(K.claims,arr);return true}
+async function cloudSetClaimStatus(id,status){await table('claims',{method:'PATCH',query:`?id=eq.${encodeURIComponent(id)}`,data:{status}});await refreshCloud();return true}
+export function matchNotifications(){return cloudEnabled?cloudState.notifications:[]}
+export async function refreshMatchNotifications(){if(!cloudEnabled)return[];const rows=await table('match_notifications',{query:'?select=*&order=created_at.desc&limit=50'});cloudState.notifications=rows;return rows}
+export function userProfiles(){return cloudEnabled?cloudState.profiles:DEMO_ACCOUNTS}
+export async function refreshProfiles(){if(!cloudEnabled)return DEMO_ACCOUNTS;cloudState.profiles=(await table('profiles',{query:'?select=*&order=created_at.desc&limit=100'})).map(row=>({id:row.id,name:row.display_name,account:row.email,role:row.email===session()?.account?'admin':'user',department:'校园用户'}));return cloudState.profiles}
 export function stats(){const all=posts(),today=dateOnly(),ds=[];for(let i=6;i>=0;i--){const day=dateOnly(Date.now()-i*86400000);ds.push({date:day.slice(5),lost:all.filter(x=>x.kind==='lost'&&x.createdAt.startsWith(day)).length,found:all.filter(x=>x.kind==='found'&&x.createdAt.startsWith(day)).length,returned:all.filter(x=>x.returnedAt?.startsWith(day)).length})}
  const locCount={};const categories={};for(const p of all){locCount[p.location]=(locCount[p.location]||0)+1;categories[p.category]=(categories[p.category]||0)+1}
  return {total:all.length,todayLost:all.filter(x=>x.kind==='lost'&&x.createdAt.startsWith(today)).length,todayFound:all.filter(x=>x.kind==='found'&&x.createdAt.startsWith(today)).length,todayReturned:all.filter(x=>x.returnedAt?.startsWith(today)).length,pending:all.filter(x=>x.status==='pending').length+claims().filter(x=>x.status==='pending').length,trends:ds,locations:Object.keys(locCount).map(name=>({name,value:locCount[name]})).sort((a,b)=>b.value-a.value),categories:Object.keys(categories).map(name=>({name,value:categories[name]})).sort((a,b)=>b.value-a.value)} }

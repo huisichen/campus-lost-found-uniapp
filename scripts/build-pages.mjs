@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -31,6 +31,7 @@ function rewriteStaticPaths(directory) {
 }
 
 rewriteStaticPaths(output)
+copyFileSync(join(root, 'public', 'sw.js'), join(output, 'sw.js'))
 writeFileSync(join(output, '.nojekyll'), '')
 const html = readFileSync(join(output, 'index.html'), 'utf8')
 if (!html.includes(`${base}assets/`) || !existsSync(join(output, 'static'))) {
