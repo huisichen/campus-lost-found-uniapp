@@ -1,4 +1,4 @@
-// Local fixtures remain for offline tests; production uses authenticated cloud records.
+// Preset accounts keep local records. AI has a separate per-install service capability.
 import {cloudEnabled, cloudLogin, cloudSignup, cloudRestore, cloudLogout, cachedIdentity, table, callFunction, mapPost, mapClaim, mapPoint} from './cloud.js'
 import {imageDataUrl} from './photo.js'
 export {cloudEnabled}
@@ -19,7 +19,7 @@ export function dateTime(t=Date.now()){const d=new Date(t);return `${dateOnly(t)
 function nDays(n){return dateTime(Date.now()-n*86400000)}
 export function maskName(s){const v=String(s||'').trim();return v?v[0]+'**':''}
 export function maskDocument(s){const a=String(s||'').trim().replace(/\s/g,'');return a.length>1?a[0]+'*'.repeat(Math.max(2,a.length-2))+a[a.length-1]:(a?'*':'')}
-export function publicPost(p){if(!p)return null;const data={...p};if(data.category==='证件卡类'){data.holderName=maskIfNotMasked(data.holderName);data.documentNo=maskIfDocumentNotMasked(data.documentNo);data.image='';}delete data.privateImage;return data}
+export function publicPost(p){if(!p)return null;const data={...p};if(data.category==='证件卡类'){data.holderName=maskIfNotMasked(data.holderName);data.documentNo=maskIfDocumentNotMasked(data.documentNo);data.image='';}delete data.privateImage;delete data.privateDetails;delete data.privateChecks;return data}
 function maskIfNotMasked(a){return a&&a.includes('*')?a:maskName(a)}
 function maskIfDocumentNotMasked(a){return a&&a.includes('*')?a:maskDocument(a)}
 export function initialize(){
@@ -68,7 +68,7 @@ export function publish(input){initialize();const s=session();if(!s||s.role!=='u
  const clean={...input};if(clean.category==='证件卡类'){clean.holderName=maskName(clean.holderName);clean.documentNo=maskDocument(clean.documentNo);clean.image=''}
  const p={id:`r${Date.now()}`,ownerId:s.id,ownerName:s.name,createdAt:dateTime(),status:'pending',pointId:'',...clean};
  // 白名单存储，避免意外将上传文件的临时路径、身份证原文等写入缓存。
- const safe={id:p.id,ownerId:p.ownerId,ownerName:p.ownerName,createdAt:p.createdAt,status:'pending',pointId:p.pointId||'',kind:p.kind,title:p.title,category:p.category,location:p.location,description:p.description||'',image:p.image||'',holderName:p.holderName||'',documentNo:p.documentNo||''}
+ const safe={id:p.id,ownerId:p.ownerId,ownerName:p.ownerName,createdAt:p.createdAt,status:'pending',pointId:p.pointId||'',kind:p.kind,title:p.title,category:p.category,location:p.location,description:p.description||'',image:p.image||'',holderName:p.holderName||'',documentNo:p.documentNo||'',eventStart:p.eventStart||'',eventEnd:p.eventEnd||''}
  put(K.posts,[safe,...get(K.posts,[])]);return publicPost(safe)
 }
 async function cloudPublish(input,s){
@@ -102,10 +102,11 @@ async function cloudSavePlace(data){const row={id:data.id||`p${Date.now()}`,name
 export function removePlace(id){if(session()?.role!=='admin')return false;if(cloudEnabled)return cloudRemovePlace(id);const arr=places();if(posts().some(p=>p.pointId===id))return false;put(K.points,arr.filter(p=>p.id!==id));return true}
 async function cloudRemovePlace(id){if(posts().some(p=>p.pointId===id))return false;await table('return_points',{method:'DELETE',query:`?id=eq.${encodeURIComponent(id)}`});await refreshCloud();return true}
 export function claims(){if(cloudEnabled)return cloudState.claims;initialize();return get(K.claims,[])}
-export function requestClaim(postId,note){initialize();const s=session(),p=findPost(postId);if(!s||s.role!=='user'||!p||p.kind!=='found'||p.ownerId===s.id||p.status!=='approved')return false;
+export function requestClaim(postId,note,verification=null){initialize();const s=session(),p=findPost(postId);if(!s||s.role!=='user'||!p||p.kind!=='found'||p.ownerId===s.id||p.status!=='approved')return false;
  if(cloudEnabled)return cloudClaim(postId,note,s)
  if(claims().some(c=>c.userId===s.id&&c.postId===postId&&c.status!=='rejected'))return false;
- put(K.claims,[{id:`c${Date.now()}`,postId,userId:s.id,userName:s.name,note:note.slice(0,140),status:'pending',createdAt:dateTime()},...claims()]);return true}
+ const safe=verification?{sessionId:verification.sessionId,decision:verification.decision,completed:verification.completed,total:verification.total,checks:(verification.checks||[]).map(x=>({question:x.question,verdict:x.verdict}))}:null;
+ put(K.claims,[{id:`c${Date.now()}`,postId,userId:s.id,userName:s.name,note:note.slice(0,140),status:'pending',createdAt:dateTime(),verification:safe},...claims()]);return true}
 async function cloudClaim(postId,note,s){await table('claims',{method:'POST',data:{id:`c${Date.now()}${Math.random().toString(36).slice(2,8)}`,post_id:postId,user_id:s.id,user_name:s.name,note:note.slice(0,140),status:'pending'}});await refreshCloud();return true}
 export function setClaimStatus(id,status){if(session()?.role!=='admin')return false;if(cloudEnabled)return cloudSetClaimStatus(id,status);const arr=claims();const c=arr.find(x=>x.id===id);if(!c)return false;c.status=status;put(K.claims,arr);return true}
 async function cloudSetClaimStatus(id,status){await table('claims',{method:'PATCH',query:`?id=eq.${encodeURIComponent(id)}`,data:{status}});await refreshCloud();return true}

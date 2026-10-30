@@ -1,19 +1,23 @@
-# DeepSeek 与推送接入说明
+# 图文匹配与智能认领接入说明
 
-当前已按展示需要回退为预设账号和本机数据。现有 UI 的结构、颜色、图标及 CSS 未改；生产构建关闭云端登录、DeepSeek 调用和 Web Push。以下内容是保留的后端准备工作，不代表当前网页版或安卓包已启用。
+2026-10-30：预设登录及原有页面样式保留，新增图片识别、图文候选排序、隐藏细节登记、多轮认领核验和核验摘要。新增内容复用原有表单、列表和按钮样式。
 
 ## 服务端
 
-Supabase 项目 `gfmcllytyanpinnzgqec` 已部署 `ai-recognize`（照片分类与描述）和 `ai-process`（审核后的图文匹配、站内通知与 Web Push）两个需要有效用户 JWT 的 Edge Functions。原 `ai-match` 保留但当前页面不再直接提交任意候选数据。数据库迁移在 `supabase/migrations/202610190001_cloud_core.sql` 至 `202610190005_foreign_key_indexes.sql`。
+当前入口是 Supabase Edge Function `item-assistant`，调用 DeepSeek `deepseek-flash`。DeepSeek 支持图片与文字输入，见[官方 Vision 文档](https://api-docs.deepseek.com/guides/vision/)。旧的 `ai-match`、`ai-recognize`、`ai-process` 和邮箱账号逻辑保留，当前预设账号版不调用它们。
 
-Supabase 原有邮箱验证和管理员许可名单仍在服务端，但预设账号不会调用它们，也不会获得云端管理员权限。匿名登录仍关闭。未来若重新启用真实账号，需重新核对权限和登录流程。
+`item-assistant` 自行验证 256 位随机设备凭证，不使用预设管理员密码，不需要开启 Supabase 匿名登录。数据库仅允许 service_role 操作，设备资料、核验答案、核验会话不向 anon/authenticated 开放；凭证只存于当前安装。每设备每日最多 60 次模型请求，全项目每日 600 次，缓存避免对相同物品重复解析。
 
-DeepSeek API 密钥与 Web Push VAPID 私钥保存在 Supabase Vault。若之前的 API 密钥曾在聊天或其他地方明文传播，建议在 DeepSeek 控制台轮换，然后只更新 Vault 中的值。
+DeepSeek API 密钥通过服务端 RPC 从 Supabase Vault 获取，未写入网页或 App。新迁移为 `supabase/migrations/20261030050253_item_assistant.sql`，与远程迁移版本一致；纯特征算法位于 `_shared/features.js`。
 
-## Web Push 条件
+## 两个模块
 
-当前预设账号版不会建立 Web Push 订阅。原实现需要真实云端登录后，才会在“我的 → 匹配提醒”请求浏览器通知权限并把订阅保存到 `push_subscriptions`。支持条件见[WebKit 的 iOS Web Push 说明](https://webkit.org/blog/13878/)及[Web Push 库文档](https://github.com/MMMikeM/web-push)。安卓原生 App 还需单独完成 DCloud UniPush 2.0 配置和实机测试。
+图文匹配：DeepSeek 将图片／自然语言解析为颜色、材质、形态、品牌及标签。两种来源使用同一 128 维属性向量编码，数据库保存向量，服务端用余弦相似度召回并结合类别、地点、日期及模型复排。该向量是明确属性的编码，不是从 DeepSeek 获取的原生 embedding，也不是自行训练的模型。冲突属性会降权，结果仅供核实。
+
+认领核验：拾获者主动登记隐藏事实，模型选择 2–4 个独立维度。服务端用不含答案的固定问法逐题提问。明确一致的回答直接比对，近义表达调用 DeepSeek 语义核验；不确定或矛盾不会自动通过。会话保存在服务端，客户端只能看到问题、逐题状态及人工复核建议。核验结论不会自动归还物品，管理员保留最后确认。
+
+没有登记足够隐藏细节的旧记录不生成虚构答案；证件类直接人工核验。当前模式仍是每次安装独立的课程项目，跨设备同步、真实用户身份与安卓原生远程推送另行配置。
 
 ## 当前验证状态
 
-数据库和服务端函数保留，但当前构建不使用。**真实 DeepSeek 调用、跨设备通知送达和安卓原生推送均未完成验收**。不能把这些未验收项目描述为当前可用功能。
+已真实调用 DeepSeek 完成照片解析、候选匹配、正确／不确定答案核验和一次性结果凭据测试；本地逻辑测试通过。UI 验收使用浏览器 390px 手机尺寸与桌面尺寸；安卓包由 HBuilderX 云打包，尚无连接的安卓实机，因此不把浏览器验收描述为实机验收。

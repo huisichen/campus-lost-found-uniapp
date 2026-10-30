@@ -2,8 +2,8 @@
     "name" : "珞珈失物招领",
     "appid" : "__UNI__3CCE22B",
     "description" : "校园失物招领课程项目，非学校官方产品",
-    "versionName" : "1.1.1",
-    "versionCode" : 111,
+    "versionName" : "1.2.0",
+    "versionCode" : 120,
     "vueVersion" : "3",
     "transformPx" : false,
     "app-plus" : {

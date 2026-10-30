@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build:pages": "node scripts/build-pages.mjs",
-    "test": "node tests/store.test.mjs && node tests/ai-match.test.mjs"
+    "test": "node tests/store.test.mjs && node tests/ai-match.test.mjs && node tests/assistant.test.mjs && node tests/photo.test.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-5020520260821001",
