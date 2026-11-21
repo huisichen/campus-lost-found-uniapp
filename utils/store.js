@@ -1,15 +1,14 @@
 // Preset accounts keep local records. AI has a separate per-install service capability.
 import {cloudEnabled, cloudLogin, cloudSignup, cloudRestore, cloudLogout, cachedIdentity, table, callFunction, mapPost, mapClaim, mapPoint} from './cloud.js'
 import {imageDataUrl} from './photo.js'
+// 本机模式的登录信息在 utils/auth.js：学号 + 学校邮箱验证码（方案 C）。
+// 云端模式（VITE_CLOUD_ENABLED=true）仍走 Supabase Auth 邮箱密码登录。
+import {session as authSession, logout as authLogout, requestCode, verifyCode, listUsers, findUserByStudentNo, maskStudentNo, maskEmail, studentEmail, isStudentNo, lastStudentNo, sha256Hex, otpMode, SESSION_DAYS, STUDENT_NO_LENGTH, CODE_TTL_MS, RESEND_SECONDS, MAX_CODE_ATTEMPTS, EMAIL_DOMAIN} from './auth.js'
+export {requestCode, verifyCode, listUsers, findUserByStudentNo, maskStudentNo, maskEmail, studentEmail, isStudentNo, lastStudentNo, sha256Hex, otpMode, SESSION_DAYS, STUDENT_NO_LENGTH, CODE_TTL_MS, RESEND_SECONDS, MAX_CODE_ATTEMPTS, EMAIL_DOMAIN}
 export {cloudEnabled}
 const cloudState={posts:[],claims:[],places:[],profiles:[],notifications:[]}
 export const CATEGORIES = ['证件卡类','电子数码','包袋衣物','生活用品','学习用品','钥匙卡类','其他']
 export const LOST_AREAS = ['图书馆周边','教学楼区域','食堂周边','宿舍区域','体育场馆','校园道路','其他地点']
-export const DEMO_ACCOUNTS = [
-  {id:'u001',account:'20260001',password:'123456',name:'李同学',role:'user',department:'信息学部'},
-  {id:'u002',account:'20260002',password:'123456',name:'王同学',role:'user',department:'文理学部'},
-  {id:'admin',account:'管理员',password:'123456',name:'平台管理员',role:'admin',department:'平台管理'}
-]
 const K={posts:'wulost_posts_v1',places:'wulost_places_v1',claims:'wulost_claims_v1',session:'wulost_session_v1',init:'wulost_initialized_v1'}
 function get(k, fallback){try{const a=uni.getStorageSync(k);return a?JSON.parse(a):fallback}catch(e){return fallback}}
 function put(k,x){uni.setStorageSync(k,JSON.stringify(x));return x}
@@ -42,11 +41,13 @@ export function initialize(){
  ]
  put(K.points,points);put(K.posts,posts);put(K.claims,[]);put(K.init,true)
 }
-export function login(role,account,password){if(cloudEnabled)return cloudLogin(account,password).then(async s=>{if(s.role===role)return s;await cloudLogout();throw new Error('此账号没有所选身份的权限')});initialize();const a=DEMO_ACCOUNTS.find(x=>x.role===role&&x.account===account.trim()&&x.password===password);if(!a)return null;const s={id:a.id,name:a.name,role:a.role,department:a.department,account:a.account};put(K.session,s);return s}
+// 登录入口：本机模式请用 requestCode/verifyCode（学号 + 学校邮箱验证码）；
+// 云端模式仍用 Supabase Auth 的邮箱密码登录，参数为 (role, email, password)。
+export function login(role,account,password){if(cloudEnabled)return cloudLogin(account,password).then(async s=>{if(s.role===role)return s;await cloudLogout();throw new Error('此账号没有所选身份的权限')});return Promise.reject(new Error('本机模式请使用学号 + 学校邮箱验证码登录'))}
 export function signup(account,password){if(!cloudEnabled)throw new Error('云端注册尚未启用');return cloudSignup(account,password)}
-export function restoreSession(){return cloudEnabled?cloudRestore():Promise.resolve(session())}
-export function session(){return cloudEnabled?cachedIdentity():get(K.session,null)}
-export function logout(){if(cloudEnabled){Object.keys(cloudState).forEach(k=>cloudState[k]=[]);return cloudLogout()}try{uni.removeStorageSync(K.session)}catch(e){} }
+export function restoreSession(){return cloudEnabled?cloudRestore():Promise.resolve(authSession())}
+export function session(){return cloudEnabled?cachedIdentity():authSession()}
+export function logout(){if(cloudEnabled){Object.keys(cloudState).forEach(k=>cloudState[k]=[]);return cloudLogout()}authLogout()}
 export function requireRole(role){const s=session();if(!s||s.role!==role){uni.reLaunch({url:'/pages/login/login'});return false}return true}
 export async function refreshCloud(){
  if(!cloudEnabled)return
@@ -112,8 +113,8 @@ export function setClaimStatus(id,status){if(session()?.role!=='admin')return fa
 async function cloudSetClaimStatus(id,status){await table('claims',{method:'PATCH',query:`?id=eq.${encodeURIComponent(id)}`,data:{status}});await refreshCloud();return true}
 export function matchNotifications(){return cloudEnabled?cloudState.notifications:[]}
 export async function refreshMatchNotifications(){if(!cloudEnabled)return[];const rows=await table('match_notifications',{query:'?select=*&order=created_at.desc&limit=50'});cloudState.notifications=rows;return rows}
-export function userProfiles(){return cloudEnabled?cloudState.profiles:DEMO_ACCOUNTS}
-export async function refreshProfiles(){if(!cloudEnabled)return DEMO_ACCOUNTS;cloudState.profiles=(await table('profiles',{query:'?select=*&order=created_at.desc&limit=100'})).map(row=>({id:row.id,name:row.display_name,account:row.email,role:row.email===session()?.account?'admin':'user',department:'校园用户'}));return cloudState.profiles}
+export function userProfiles(){return cloudEnabled?cloudState.profiles:listUsers()}
+export async function refreshProfiles(){if(!cloudEnabled)return listUsers();cloudState.profiles=(await table('profiles',{query:'?select=*&order=created_at.desc&limit=100'})).map(row=>({id:row.id,name:row.display_name,account:row.email,role:row.email===session()?.account?'admin':'user',department:'校园用户'}));return cloudState.profiles}
 export function stats(){const all=posts(),today=dateOnly(),ds=[];for(let i=6;i>=0;i--){const day=dateOnly(Date.now()-i*86400000);ds.push({date:day.slice(5),lost:all.filter(x=>x.kind==='lost'&&x.createdAt.startsWith(day)).length,found:all.filter(x=>x.kind==='found'&&x.createdAt.startsWith(day)).length,returned:all.filter(x=>x.returnedAt?.startsWith(day)).length})}
  const locCount={};const categories={};for(const p of all){locCount[p.location]=(locCount[p.location]||0)+1;categories[p.category]=(categories[p.category]||0)+1}
  return {total:all.length,todayLost:all.filter(x=>x.kind==='lost'&&x.createdAt.startsWith(today)).length,todayFound:all.filter(x=>x.kind==='found'&&x.createdAt.startsWith(today)).length,todayReturned:all.filter(x=>x.returnedAt?.startsWith(today)).length,pending:all.filter(x=>x.status==='pending').length+claims().filter(x=>x.status==='pending').length,trends:ds,locations:Object.keys(locCount).map(name=>({name,value:locCount[name]})).sort((a,b)=>b.value-a.value),categories:Object.keys(categories).map(name=>({name,value:categories[name]})).sort((a,b)=>b.value-a.value)} }

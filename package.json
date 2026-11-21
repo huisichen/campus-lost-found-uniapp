@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "dev": "node scripts/dev-h5.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "test": "node tests/store.test.mjs && node tests/ai-match.test.mjs && node tests/assistant.test.mjs && node tests/photo.test.mjs"
   },
