@@ -8,6 +8,7 @@
 ## 在线预览
 
 - 网页版：https://huisichen.github.io/campus-lost-found-uniapp/
+- 安卓安装包 v1.2.1：https://github.com/huisichen/campus-lost-found-uniapp/releases/tag/v1.2.1-android
 - 页面文件在 `docs/` 目录（GitHub Pages 发布源）。
 
 ## 功能
