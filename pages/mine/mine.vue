@@ -25,7 +25,7 @@ const suggestions=computed(()=>cloudEnabled?aiMatches.value:(aiChecked.value?aiM
 const matchNotice=computed(()=>matching.value?'正在分析图文属性、地点和日期，首次分析可能需要片刻。':aiChecked.value?'DeepSeek 提取图文属性并结合向量相似度、类别及时间地点排序；结果只作线索，认领需进一步核验。':'当前显示本机规则线索，打开本页后会尝试图文匹配。')
 function openMatches(){tab.value='matches';requestMatchNotificationPermission().catch(e=>uni.showToast({title:e.message||'推送授权未完成',icon:'none'}));refreshMatches()}
 async function refreshMatches(){
- if(cloudEnabled){try{const rows=await refreshMatchNotifications();aiMatches.value=rows.map(row=>({a:all.value.find(p=>p.id===row.lost_id),b:all.value.find(p=>p.id===row.found_id),score:row.score})).filter(x=>x.a&&x.b);aiChecked.value=true}catch(e){uni.showToast({title:e.message||'匹配记录加载失败',icon:'none'})}return}
+ if(cloudEnabled){try{await refreshCloud();all.value=posts();allClaims.value=claims();const rows=await refreshMatchNotifications();aiMatches.value=rows.map(row=>{const lost=all.value.find(p=>p.id===row.lost_id),found=all.value.find(p=>p.id===row.found_id);return {a:lost?.ownerId===who.value.id?lost:found,b:lost?.ownerId===who.value.id?found:lost,score:row.score,reason:row.reason}}).filter(x=>x.a&&x.b);aiChecked.value=true}catch(e){uni.showToast({title:e.message||'匹配记录加载失败',icon:'none'})}return}
  if(!aiAvailable||matching.value)return
  const lost=mine.value.filter(p=>p.status==='approved').slice(0,6)
  const found=all.value.filter(p=>p.status==='approved'&&p.ownerId!==who.value?.id)

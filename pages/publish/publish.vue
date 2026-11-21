@@ -26,7 +26,7 @@
  <view v-else class="form-section">
   <text class="form-heading">物品照片</text>
   <view class="upload-row" @tap="selectImage"><image v-if="photo" :src="photo" mode="aspectFill"/><view v-else><AppIcon name="camera" :size="49"/><text>拍照或从相册选择</text></view></view>
-  <text class="note assistant-note">{{aiAvailable?'照片将传给 DeepSeek 提取外观特征；照片保存在本机，服务端保存解析后的属性和特征向量。请勿上传证件照片。':'可选填，建议上传清晰的物品照片。当前数据仅保存在本机。'}}</text>
+  <text class="note assistant-note">{{aiAvailable?(cloudEnabled?'照片和物品资料将保存至云端并用于 AI 匹配。请勿上传证件照片。':'照片将传给 DeepSeek 提取外观特征；照片保存在本机，服务端保存解析后的属性和特征向量。请勿上传证件照片。'):'可选填，建议上传清晰的物品照片。当前数据仅保存在本机。'}}</text>
   <view class="recognition" @tap="runRecognition"><AppIcon name="image" :size="30"/><text>{{recognizing?'正在识别物品…':'尝试图片识别'}}</text><text class="dim">{{aiAvailable?'（AI 辅助填写）':'（服务待接入）'}}</text></view>
  </view>
  <view v-if="kind==='found'&&!isDocument" class="form-section">
@@ -45,7 +45,7 @@
 </template>
 <script setup>
 import {ref,computed} from 'vue';import {onLoad} from '@dcloudio/uni-app';import AppIcon from '../../components/AppIcon.vue'
-import {CATEGORIES,LOST_AREAS,publish,places,maskName,maskDocument,requireRole,refreshCloud} from '../../utils/store.js'
+import {CATEGORIES,LOST_AREAS,publish,places,maskName,maskDocument,requireRole,refreshCloud,cloudEnabled} from '../../utils/store.js'
 import {recognizeItemImage,aiAvailable,syncAiItem} from '../../utils/ai-service.js'
 const kind=ref('lost'),categories=CATEGORIES,categoryIndex=ref(0),areas=LOST_AREAS,areaIndex=ref(0),title=ref(''),description=ref(''),holderName=ref(''),documentNo=ref(''),photo=ref(''),saving=ref(false),pointIndex=ref(0),points=ref([])
 const isDocument=computed(()=>CATEGORIES[categoryIndex.value]==='证件卡类')

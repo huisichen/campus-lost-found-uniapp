@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,12 +9,19 @@ const output = join(root, 'docs')
 const base = '/campus-lost-found-uniapp/'
 const require = createRequire(import.meta.url)
 const compiler = require.resolve('@dcloudio/vite-plugin-uni/bin/uni.js')
+// The compiler cleans docs; retain previously published Android downloads.
+const downloads = join(output, 'downloads')
+const packages = existsSync(downloads) ? readdirSync(downloads).filter(name => /^[a-zA-Z0-9._-]+\.apk$/.test(name)).map(name => [name, readFileSync(join(downloads, name))]) : []
 
 const result = spawnSync(process.execPath, [compiler, 'build', '--config', 'vite.config.js', '--base', base], {
   cwd: root,
   env: { ...process.env, UNI_INPUT_DIR: root, UNI_OUTPUT_DIR: output, UNI_PLATFORM: 'h5' },
   stdio: 'inherit'
 })
+if (packages.length) {
+  mkdirSync(downloads, { recursive: true })
+  for (const [name, bytes] of packages) writeFileSync(join(downloads, name), bytes)
+}
 if (result.status !== 0) process.exit(result.status || 1)
 
 function rewriteStaticPaths(directory) {

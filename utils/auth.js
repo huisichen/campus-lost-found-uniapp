@@ -11,6 +11,7 @@
 //   4. 会话凭证由前端生成，正式上线应由服务端签发。
 //
 // 换成服务端认证时只改本文件的 requestCode / verifyCode / session / listUsers，页面不用动。
+import {serverEnabled,serverIdentity,serverSendCode,serverVerifyCode} from './server.js'
 const USERS_KEY = 'wulost_users_v1'
 const SESSION_KEY = 'wulost_session_v1'
 const LAST_NO_KEY = 'wulost_last_student_no_v1'
@@ -27,7 +28,7 @@ export const EMAIL_DOMAIN = '@whu.edu.cn'
 
 const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {}
 // 'inline'（默认，演示）| 'supabase'（真实发信，需要 Supabase Auth 已开通邮件服务）
-export const otpMode = env.VITE_OTP_MODE === 'supabase' ? 'supabase' : 'inline'
+export const otpMode = serverEnabled?'server':env.VITE_OTP_MODE === 'supabase' ? 'supabase' : 'inline'
 const SUPABASE_URL = env.VITE_SUPABASE_URL || ''
 const SUPABASE_KEY = env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
 
@@ -110,6 +111,7 @@ export function lastStudentNo(){
 // —— 第一步：获取验证码 ——
 // 返回 {ok:true, email, mode, devCode?}；演示模式下 devCode 是给页面显示的验证码。
 export async function requestCode(studentNo){
+  if(serverEnabled)return serverSendCode(String(studentNo||'').trim())
   seedUsers()
   const no=String(studentNo==null?'':studentNo).trim()
   if(!isStudentNo(no))return fail('BAD_FORMAT',`请输入 ${STUDENT_NO_LENGTH} 位学号`)
@@ -147,6 +149,7 @@ export async function requestCode(studentNo){
 
 // —— 第二步：校验验证码并建立会话 ——
 export async function verifyCode(studentNo,code){
+  if(serverEnabled)return serverVerifyCode(String(studentNo||'').trim(),String(code||'').trim())
   seedUsers()
   const no=String(studentNo==null?'':studentNo).trim()
   const input=String(code==null?'':code).trim()
@@ -228,6 +231,7 @@ function randomCode(){
 }
 
 export function session(){
+  if(serverEnabled)return serverIdentity()
   let s=null
   try{const raw=uni.getStorageSync(SESSION_KEY);s=raw?JSON.parse(raw):null}catch(e){s=null}
   if(!s||!s.id)return null

@@ -18,22 +18,23 @@
   <view v-if="devCode" class="dev-code">演示模式：本次验证码 <text class="dev-num">{{devCode}}</text>（未真正发送邮件）</view>
   <view v-if="error" class="error-line">{{error}}</view>
   <button class="submit" :disabled="loading" @tap="submit">{{loading ? '正在登录…' : '登录'}}</button>
-  <view class="hint">首次登录会自动建档；姓名与院系可在「我的」中补充。</view>
-  <view class="demo-tag">课程项目 · 验证码为演示用途 · 未接入学校统一身份认证</view>
+  <view class="hint">首次验证邮箱后自动建档。</view>
+  <view class="demo-tag">{{serverEnabled?'学校邮箱验证码验证 · 管理员权限由服务端确认':'课程项目 · 验证码为演示用途 · 未接入学校统一身份认证'}}</view>
  </view>
  <view class="footer-note">自强 弘毅 求是 拓新</view>
 </view>
 </template>
 <script setup>
 import {ref,onMounted,onUnmounted} from 'vue'
+import {serverEnabled} from '../../utils/server.js'
 import AppIcon from '../../components/AppIcon.vue'
 import SchoolLogo from '../../components/SchoolLogo.vue'
-import {requestCode,verifyCode,session,lastStudentNo,STUDENT_NO_LENGTH,RESEND_SECONDS} from '../../utils/store.js'
+import {requestCode,verifyCode,session,restoreSession,lastStudentNo,STUDENT_NO_LENGTH,RESEND_SECONDS} from '../../utils/store.js'
 const studentNo=ref(lastStudentNo()),code=ref(''),error=ref(''),loading=ref(false),sending=ref(false)
 const devCode=ref(''),counting=ref(false),countdown=ref(RESEND_SECONDS)
 let timer=null
 function homeFor(role){return role==='admin'?'/pages/admin/dashboard/dashboard':'/pages/home/home'}
-onMounted(()=>{const s=session();if(s)uni.redirectTo({url:homeFor(s.role)})})
+onMounted(async()=>{let s=session();if(s&&serverEnabled){try{s=await restoreSession()}catch{s=null}}if(s)uni.redirectTo({url:homeFor(s.role)})})
 onUnmounted(()=>{if(timer)clearInterval(timer)})
 function startCountdown(){
   counting.value=true;countdown.value=RESEND_SECONDS

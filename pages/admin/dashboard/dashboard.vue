@@ -11,15 +11,16 @@
    <view class="panel"><view class="section-title">失物高发地点</view><view v-for="(loc,i) in data.locations.slice(0,6)" :key="loc.name" class="rank"><text class="rank-no">{{i+1}}</text><text class="rank-label">{{loc.name}}</text><view class="rank-track"><view :style="{width:rankWidth(loc.value)+'%'}"></view></view><text class="rank-value">{{loc.value}}</text></view><view v-if="!data.locations.length" class="no-data">暂无地点数据</view></view>
    <view class="panel"><view class="section-title">物品分类分布</view><view v-for="cat in data.categories" :key="cat.name" class="category-row"><text>{{cat.name}}</text><view class="rank-track"><view :style="{width:(cat.value / Math.max(1,data.total)*100)+'%'}"></view></view><text>{{cat.value}}件</text></view></view>
    <view class="panel"><view class="section-head"><text class="section-title">待处理记录</text><text class="all" @tap="openRecords">查看全部 ›</text></view><view v-for="p in recent" :key="p.id" class="recent-row" @tap="openRecords"><text>{{p.title}}</text><text>{{p.location}}</text><text class="pill pill-wait">{{STATUS[p.status]}}</text></view><view v-if="!recent.length" class="no-data">没有待审核信息</view></view>
-   <view class="warning">统计来自平台记录，尚未接入学校统一身份认证。</view>
+   <view class="warning">{{operationSummary||'统计来自平台记录，尚未接入学校统一身份认证。'}}</view>
  </view>
  <AdminNav active="dashboard"/>
 </view>
 </template>
 <script setup>
-import {ref,computed} from 'vue';import {onShow} from '@dcloudio/uni-app';import SchoolLogo from '../../../components/SchoolLogo.vue';import AppIcon from '../../../components/AppIcon.vue';import AdminNav from '../../../components/AdminNav.vue';import {stats,posts,session,logout,STATUS,dateOnly,requireRole,refreshCloud} from '../../../utils/store.js'
+import {ref,computed} from 'vue';import {serverEnabled,serverRequest} from '../../../utils/server.js';import {onShow} from '@dcloudio/uni-app';import SchoolLogo from '../../../components/SchoolLogo.vue';import AppIcon from '../../../components/AppIcon.vue';import AdminNav from '../../../components/AdminNav.vue';import {stats,posts,session,logout,STATUS,dateOnly,requireRole,refreshCloud} from '../../../utils/store.js'
+const operationSummary=ref('')
 const data=ref({todayLost:0,todayFound:0,todayReturned:0,pending:0,total:0,trends:[],locations:[],categories:[]}),all=ref([]),today=dateOnly()
-onShow(async()=>{if(!requireRole('admin'))return;try{await refreshCloud();data.value=stats();all.value=posts()}catch(e){uni.showToast({title:e.message||'数据加载失败',icon:'none'})}})
+onShow(async()=>{if(!requireRole('admin'))return;try{await refreshCloud();data.value=stats();all.value=posts();if(serverEnabled){const op=await serverRequest('/admin/operations');const tokens=op.usage.reduce((n,x)=>n+(x.total_tokens||0),0);const pending=op.jobs.filter(x=>x.state==='pending'||x.state==='running').reduce((n,x)=>n+x.count,0);operationSummary.value='近期模型用量 '+tokens+' tokens · 等待或执行中的分析任务 '+pending+' 个'}}catch(e){uni.showToast({title:e.message||'数据加载失败',icon:'none'})}})
 const recent=computed(()=>all.value.filter(p=>p.status==='pending').slice(0,5))
 function barHeight(n){const arr=data.value.trends||[];const max=Math.max(1,...arr.flatMap(x=>[x.lost,x.found,x.returned]));return Math.max(2,(n/max)*88)}
 function rankWidth(n){return n/Math.max(1,...data.value.locations.map(x=>x.value))*100}

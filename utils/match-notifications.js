@@ -1,4 +1,5 @@
 import {cloudEnabled, table, cachedIdentity} from './cloud.js'
+import {serverEnabled} from './server.js'
 
 const vapidPublicKey = (import.meta.env || {}).VITE_WEB_PUSH_PUBLIC_KEY || ''
 const seenKey = 'wulost_ai_notified_v1'
@@ -10,6 +11,7 @@ function decodeKey(base64) {
 }
 
 export async function requestMatchNotificationPermission() {
+  if(serverEnabled)return false
   if (!cloudEnabled) {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') await Notification.requestPermission()
     return false
@@ -36,6 +38,7 @@ export async function requestMatchNotificationPermission() {
 }
 
 export async function removePushSubscription() {
+  if(serverEnabled)return
   if (!cloudEnabled || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
   const registration = await navigator.serviceWorker.getRegistration()
   const subscription = await registration?.pushManager.getSubscription()

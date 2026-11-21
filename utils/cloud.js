@@ -1,8 +1,9 @@
-// Public Supabase settings only. Authorization always comes from the signed-in user.
+import {serverEnabled,serverUrl,serverIdentity,serverTable,serverRequest,serverRestore,serverLogout} from './server.js'
+// Public settings only. Authorization always comes from the signed-in user.
 const env = import.meta.env || {}
 const url = (env.VITE_SUPABASE_URL || '').replace(/\/$/, '')
 const key = env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
-export const cloudEnabled = Boolean(url && key && env.VITE_CLOUD_ENABLED === 'true')
+export const cloudEnabled = serverEnabled || Boolean(url && key && env.VITE_CLOUD_ENABLED === 'true')
 const storageKey = 'wulost_real_auth_v1'
 let refreshInFlight = null
 
@@ -39,6 +40,7 @@ function identity(user) {
   return { id: user.id, account: user.email, name, role, department: role === 'admin' ? '平台管理' : '校园用户' }
 }
 export function cachedIdentity() {
+  if(serverEnabled)return serverIdentity()
   const saved = readSession()
   return saved?.user ? identity(saved.user) : null
 }
@@ -61,6 +63,7 @@ export async function cloudToken() {
   return refreshInFlight
 }
 export async function cloudRestore() {
+  if(serverEnabled)return serverRestore()
   const token = await cloudToken()
   const user = await cloudRequest('/auth/v1/user', { token })
   const saved = readSession()
@@ -68,6 +71,7 @@ export async function cloudRestore() {
   return identity(user)
 }
 export async function cloudLogout() {
+  if(serverEnabled)return serverLogout()
   const saved = readSession()
   saveSession(null)
   if (saved?.access_token) {
@@ -75,12 +79,14 @@ export async function cloudLogout() {
   }
 }
 export async function table(name, { method = 'GET', query = '', data, prefer } = {}) {
+  if(serverEnabled)return serverTable(name,{method,query,data})
   const token = await cloudToken()
   return cloudRequest(`/rest/v1/${name}${query}`, {
     method, data, token, extraHeaders: prefer ? { Prefer: prefer } : {}
   })
 }
 export async function callFunction(name, data) {
+  if(serverEnabled){if(name==='ai-process')return serverRequest('/match/recheck',{method:'POST',data});throw new Error('该旧服务在当前模式下不使用')}
   const token = await cloudToken()
   return cloudRequest(`/functions/v1/${name}`, { method: 'POST', data, token })
 }
@@ -91,13 +97,13 @@ function localTime(value) {
 export function mapPost(row) {
   return { id: row.id, ownerId: row.owner_id, ownerName: row.owner_name, kind: row.kind,
     title: row.title, category: row.category, location: row.location, description: row.description,
-    image: row.image, holderName: row.holder_name, documentNo: row.document_no,
+    image:serverEnabled&&row.image?.startsWith('/api/media/')?serverUrl.replace(/\/api$/,'')+row.image:row.image, holderName: row.holder_name, documentNo: row.document_no,
     status: row.status, pointId: row.point_id || '', createdAt: localTime(row.created_at),
-    returnedAt: localTime(row.returned_at) }
+    returnedAt: localTime(row.returned_at),eventStart:row.event_start||'',eventEnd:row.event_end||'' }
 }
 export function mapClaim(row) {
   return { id: row.id, postId: row.post_id, userId: row.user_id, userName: row.user_name,
-    note: row.note, status: row.status, createdAt: localTime(row.created_at) }
+    note: row.note, status: row.status, createdAt: localTime(row.created_at),verification:row.verification||null }
 }
 export function mapPoint(row) {
   return { id: row.id, name: row.name, address: row.address, hours: row.hours,

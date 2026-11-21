@@ -1,6 +1,6 @@
 <template>
 <view class="page-body users-page">
- <view class="admin-title"><text>用户管理</text><text>{{cloudEnabled ? '云端账号表（Supabase profiles）' : '学号 + 学校邮箱验证码登录；账号表保存在本机'}}</text></view>
+ <view class="admin-title"><text>用户管理</text><text>{{cloudEnabled ? '学校邮箱验证账号 · 云端共享' : '学号 + 学校邮箱验证码登录；账号表保存在本机'}}</text></view>
  <view class="stat-strip">共 {{list.length}} 个账号　·　学生 {{studentCount}}　·　管理员 {{adminCount}}</view>
  <view v-for="u in list" :key="u.id" class="user-row">
    <view class="user-avatar"><AppIcon name="user" :size="39"/></view>
@@ -11,7 +11,7 @@
      <text class="muted">{{u.statusText}}</text>
    </view>
  </view>
- <view class="note">{{cloudEnabled ? '云端模式下管理员角色由服务端 app_metadata 判定，前端只做展示。' : '验证码只以「加盐摘要」暂存在本机，5 分钟后失效、最多试 5 次。正式版应由服务端发信、签发凭证并判定管理员角色。'}}</view>
+ <view class="note">{{cloudEnabled ? '管理员角色及账号权限由服务端判定；此处展示已验证邮箱的账号。' : '验证码只以「加盐摘要」暂存在本机，5 分钟后失效、最多试 5 次。正式版应由服务端发信、签发凭证并判定管理员角色。'}}</view>
  <AdminNav active="users"/>
 </view>
 </template>

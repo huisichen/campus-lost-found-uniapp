@@ -1,5 +1,11 @@
 node_modules/
 unpackage/
+backend/.env
+backend/data/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.venv/
+!backend/.env.example
 *.log
 .env
 .env.*

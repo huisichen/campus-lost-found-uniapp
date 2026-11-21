@@ -1,6 +1,7 @@
 // Preset accounts keep local records. AI has a separate per-install service capability.
 import {cloudEnabled, cloudLogin, cloudSignup, cloudRestore, cloudLogout, cachedIdentity, table, callFunction, mapPost, mapClaim, mapPoint} from './cloud.js'
 import {imageDataUrl} from './photo.js'
+import {serverEnabled} from './server.js'
 // 本机模式的登录信息在 utils/auth.js：学号 + 学校邮箱验证码（方案 C）。
 // 云端模式（VITE_CLOUD_ENABLED=true）仍走 Supabase Auth 邮箱密码登录。
 import {session as authSession, logout as authLogout, requestCode, verifyCode, listUsers, findUserByStudentNo, maskStudentNo, maskEmail, studentEmail, isStudentNo, lastStudentNo, sha256Hex, otpMode, SESSION_DAYS, STUDENT_NO_LENGTH, CODE_TTL_MS, RESEND_SECONDS, MAX_CODE_ATTEMPTS, EMAIL_DOMAIN} from './auth.js'
@@ -79,7 +80,7 @@ async function cloudPublish(input,s){
  const row={id:`r${Date.now()}${Math.random().toString(36).slice(2,8)}`,owner_id:s.id,owner_name:s.name,
   kind:clean.kind,title:clean.title,category:clean.category,location:clean.location,
   description:clean.description||'',image:clean.image||'',holder_name:clean.holderName||'',document_no:clean.documentNo||'',
-  point_id:clean.kind==='found'&&clean.pointId?clean.pointId:null,status:'pending'}
+  point_id:clean.kind==='found'&&clean.pointId?clean.pointId:null,status:'pending',...(serverEnabled?{event_start:clean.eventStart||'',event_end:clean.eventEnd||''}:{})}
  const result=await table('posts',{method:'POST',data:row,prefer:'return=representation'})
  await refreshCloud()
  return publicPost(mapPost(result[0]))
@@ -94,7 +95,7 @@ async function cloudEditPost(id,patch,s){
  const result=await table('posts',{method:'PATCH',query:`?id=eq.${encodeURIComponent(id)}&select=id`,data,prefer:'return=representation'})
  if(!result.length)return false
  await refreshCloud()
- if(patch.status==='approved'&&s.role==='admin')await callFunction('ai-process',{postId:id})
+ if(!serverEnabled&&patch.status==='approved'&&s.role==='admin')await callFunction('ai-process',{postId:id})
  return true
 }
 export function places(){if(cloudEnabled)return cloudState.places;initialize();return get(K.points,[])}
@@ -104,19 +105,19 @@ export function removePlace(id){if(session()?.role!=='admin')return false;if(clo
 async function cloudRemovePlace(id){if(posts().some(p=>p.pointId===id))return false;await table('return_points',{method:'DELETE',query:`?id=eq.${encodeURIComponent(id)}`});await refreshCloud();return true}
 export function claims(){if(cloudEnabled)return cloudState.claims;initialize();return get(K.claims,[])}
 export function requestClaim(postId,note,verification=null){initialize();const s=session(),p=findPost(postId);if(!s||s.role!=='user'||!p||p.kind!=='found'||p.ownerId===s.id||p.status!=='approved')return false;
- if(cloudEnabled)return cloudClaim(postId,note,s)
+ if(cloudEnabled)return cloudClaim(postId,note,s,verification)
  if(claims().some(c=>c.userId===s.id&&c.postId===postId&&c.status!=='rejected'))return false;
  const safe=verification?{sessionId:verification.sessionId,decision:verification.decision,completed:verification.completed,total:verification.total,checks:(verification.checks||[]).map(x=>({question:x.question,verdict:x.verdict}))}:null;
  put(K.claims,[{id:`c${Date.now()}`,postId,userId:s.id,userName:s.name,note:note.slice(0,140),status:'pending',createdAt:dateTime(),verification:safe},...claims()]);return true}
-async function cloudClaim(postId,note,s){await table('claims',{method:'POST',data:{id:`c${Date.now()}${Math.random().toString(36).slice(2,8)}`,post_id:postId,user_id:s.id,user_name:s.name,note:note.slice(0,140),status:'pending'}});await refreshCloud();return true}
+async function cloudClaim(postId,note,s,verification){await table('claims',{method:'POST',data:{id:`c${Date.now()}${Math.random().toString(36).slice(2,8)}`,post_id:postId,user_id:s.id,user_name:s.name,note:note.slice(0,140),status:'pending',...(serverEnabled?{verification}: {})}});await refreshCloud();return true}
 export function setClaimStatus(id,status){if(session()?.role!=='admin')return false;if(cloudEnabled)return cloudSetClaimStatus(id,status);const arr=claims();const c=arr.find(x=>x.id===id);if(!c)return false;c.status=status;put(K.claims,arr);return true}
 async function cloudSetClaimStatus(id,status){await table('claims',{method:'PATCH',query:`?id=eq.${encodeURIComponent(id)}`,data:{status}});await refreshCloud();return true}
 export function matchNotifications(){return cloudEnabled?cloudState.notifications:[]}
 export async function refreshMatchNotifications(){if(!cloudEnabled)return[];const rows=await table('match_notifications',{query:'?select=*&order=created_at.desc&limit=50'});cloudState.notifications=rows;return rows}
 export function userProfiles(){return cloudEnabled?cloudState.profiles:listUsers()}
-export async function refreshProfiles(){if(!cloudEnabled)return listUsers();cloudState.profiles=(await table('profiles',{query:'?select=*&order=created_at.desc&limit=100'})).map(row=>({id:row.id,name:row.display_name,account:row.email,role:row.email===session()?.account?'admin':'user',department:'校园用户'}));return cloudState.profiles}
+export async function refreshProfiles(){if(!cloudEnabled)return listUsers();const rows=await table('profiles',{query:'?select=*&order=created_at.desc&limit=100'});cloudState.profiles=serverEnabled?rows:rows.map(row=>({id:row.id,name:row.display_name,account:row.email,role:row.email===session()?.account?'admin':'user',department:'校园用户'}));return cloudState.profiles}
 export function stats(){const all=posts(),today=dateOnly(),ds=[];for(let i=6;i>=0;i--){const day=dateOnly(Date.now()-i*86400000);ds.push({date:day.slice(5),lost:all.filter(x=>x.kind==='lost'&&x.createdAt.startsWith(day)).length,found:all.filter(x=>x.kind==='found'&&x.createdAt.startsWith(day)).length,returned:all.filter(x=>x.returnedAt?.startsWith(day)).length})}
- const locCount={};const categories={};for(const p of all){locCount[p.location]=(locCount[p.location]||0)+1;categories[p.category]=(categories[p.category]||0)+1}
+ const locCount={};const categories={};for(const p of all){if(p.kind==='lost')locCount[p.location]=(locCount[p.location]||0)+1;categories[p.category]=(categories[p.category]||0)+1}
  return {total:all.length,todayLost:all.filter(x=>x.kind==='lost'&&x.createdAt.startsWith(today)).length,todayFound:all.filter(x=>x.kind==='found'&&x.createdAt.startsWith(today)).length,todayReturned:all.filter(x=>x.returnedAt?.startsWith(today)).length,pending:all.filter(x=>x.status==='pending').length+claims().filter(x=>x.status==='pending').length,trends:ds,locations:Object.keys(locCount).map(name=>({name,value:locCount[name]})).sort((a,b)=>b.value-a.value),categories:Object.keys(categories).map(name=>({name,value:categories[name]})).sort((a,b)=>b.value-a.value)} }
 export const STATUS={pending:'待审核',approved:'寻找中',returned:'已归还',rejected:'未通过',closed:'已关闭'}
 export const CLAIM_STATUS={pending:'待核实',approved:'已通过',rejected:'未通过'}
