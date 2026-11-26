@@ -9,10 +9,11 @@
  <view class="action-strip"><view @tap="toPublish('lost')"><AppIcon name="search" :size="38"/><text>发布丢失信息</text><text class="arrow">›</text></view><view @tap="toPublish('found')"><AppIcon name="add" :size="38"/><text>发布招领信息</text><text class="arrow">›</text></view></view>
  <view class="list-box">
   <view class="section-head"><view class="section-title">{{active==='lost'?'丢失物品':active==='found'?'拾取物品':'最新失物与招领'}}<text class="result-count">共{{filtered.length}}条</text></view><view class="refresh" @tap="reload"><AppIcon name="refresh" :size="29"/><text>刷新</text></view></view>
+  <view class="filter-tabs"><text :class="active==='home'?'active':''" @tap="active='home'">全部</text><text :class="active==='lost'?'active':''" @tap="active='lost'">丢失物品</text><text :class="active==='found'?'active':''" @tap="active='found'">拾取物品</text></view>
   <ItemRow v-for="p in filtered" :key="p.id" :item="p"/>
   <view v-if="!filtered.length" class="no-data">没有找到符合条件的物品，试试其他关键词。</view>
  </view>
- <UserNav :active="active" />
+ <UserNav active="home" />
 </view>
 </template>
 <script setup>
@@ -35,4 +36,5 @@ onLoad(setupPage);onShow(()=>{if(requireRole('user'))reload()})
 .hero{height:300rpx;position:relative}.hero image{width:100%;height:100%}.hero-shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,27,57,.75),transparent)}.hero-message{position:absolute;top:55rpx;left:38rpx;color:white;display:flex;flex-direction:column;gap:6rpx}.hero-main{font-family:serif;font-size:46rpx;font-weight:bold;letter-spacing:4rpx}.hero-small{font-size:21rpx;margin-top:18rpx}
 .filter-area{background:white;padding:22rpx 25rpx 10rpx}.search{height:76rpx;background:#f5f7f9;border:1rpx solid #d7e1ea;border-radius:7rpx;display:flex;align-items:center;padding-left:15rpx;gap:10rpx}.search input{flex:1;font-size:24rpx;height:68rpx}.search>view{height:75rpx;line-height:75rpx;background:#002554;color:white;padding:0 29rpx;font-size:25rpx}.category-scroll{margin-top:18rpx;white-space:nowrap}.category-list{display:flex;gap:8rpx;width:max-content;padding-bottom:12rpx}.cat{min-width:115rpx;padding:13rpx 15rpx;display:flex;flex-direction:column;align-items:center;gap:7rpx;font-size:20rpx;color:#60738b;border-bottom:3rpx solid transparent}.cat-active{border-color:#002554;background:#edf3f8;color:#002554;font-weight:700}
 .action-strip{display:flex;gap:15rpx;background:#fff;padding:14rpx 24rpx 22rpx}.action-strip>view{flex:1;border:1rpx solid #dce4ec;padding:23rpx 12rpx;display:flex;align-items:center;gap:9rpx;color:#002554;font-size:24rpx;font-weight:700}.action-strip>view:last-child{background:#f0f6f2;color:#115740;border-color:#d5e5dc}.arrow{margin-left:auto;font-size:34rpx}.list-box{background:#fff;margin-top:14rpx;padding:3rpx 25rpx 28rpx}.refresh{display:flex;gap:5rpx;color:#77899a;font-size:23rpx;align-items:center}.result-count{margin-left:16rpx;font-size:20rpx;font-weight:400;color:#65798c}
+.filter-tabs{display:flex;align-items:center;gap:36rpx;border-bottom:1rpx solid #e9eef1}.filter-tabs text{color:#65798c;font-size:26rpx;padding-bottom:19rpx}.filter-tabs text.active{color:#002554;font-weight:700;border-bottom:4rpx solid #002554}
 </style>
