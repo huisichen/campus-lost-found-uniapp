@@ -9,7 +9,17 @@ export {requestCode, verifyCode, listUsers, findUserByStudentNo, maskStudentNo, 
 export {cloudEnabled}
 const cloudState={posts:[],claims:[],places:[],profiles:[],notifications:[]}
 export const CATEGORIES = ['证件卡类','电子数码','包袋衣物','生活用品','学习用品','钥匙卡类','其他']
-export const LOST_AREAS = ['图书馆周边','教学楼区域','食堂周边','宿舍区域','体育场馆','校园道路','其他地点']
+// 地点名称来源：武汉大学图书馆与综合事务服务中心，具体入口和楼层由发布者在说明中补充。
+// https://oldwww.lib.whu.edu.cn/webfile/
+// https://service.whu.edu.cn/info/1009/1324.htm
+export const LOST_AREAS = [
+ '图书馆总馆','图书馆工学分馆','图书馆信息科学分馆','图书馆医学分馆',
+ '教五楼','人文馆','行政楼','经管学院','法学院','外语学院',
+ '梅园食堂','信息学部二食堂','大学生活动中心','信息学部青年楼',
+ '枫园十四舍','枫园三舍','桂园','樱园','湖滨',
+ '工学部网球场','信息学部游泳池','珞珈山庄','未名湖',
+ '图书馆周边','教学楼区域','食堂周边','宿舍区域','体育场馆','校园道路','其他地点'
+]
 const K={posts:'wulost_posts_v1',places:'wulost_places_v1',claims:'wulost_claims_v1',session:'wulost_session_v1',init:'wulost_initialized_v1'}
 function get(k, fallback){try{const a=uni.getStorageSync(k);return a?JSON.parse(a):fallback}catch(e){return fallback}}
 function put(k,x){uni.setStorageSync(k,JSON.stringify(x));return x}
