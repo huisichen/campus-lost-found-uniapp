@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import math
 import os
 import re
@@ -19,8 +20,11 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from email.message import EmailMessage
+from email.utils import formataddr, formatdate, make_msgid
 
 from .model import Model
+
+LOG = logging.getLogger('campus.mail')
 
 CATEGORIES = ['证件卡类', '电子数码', '包袋衣物', '生活用品', '学习用品', '钥匙卡类', '其他']
 QUESTIONS = {'lining': '物品内侧或内衬是什么颜色、材质？', 'zipper': '拉链头、扣件有什么特别之处？',
@@ -76,23 +80,52 @@ def smtp_send(email, code):
     if not all((host, user, password)):
         raise Problem('管理员尚未配置发信邮箱，请稍后再试', 503)
     msg = EmailMessage()
-    msg['Subject'] = '校园失物招领登录验证码'
-    msg['From'] = os.getenv('SMTP_FROM') or user
+    msg['Subject'] = '珞珈失物招领：登录验证码'
+    msg['From'] = formataddr((os.getenv('SMTP_FROM_NAME', '珞珈失物招领'), os.getenv('SMTP_FROM') or user))
     msg['To'] = email
-    msg.set_content(f'你的登录验证码为 {code}，5 分钟内有效。请勿转发。非本人操作请忽略。')
+    msg['Date'] = formatdate(localtime=True)
+    msg['Message-ID'] = make_msgid(domain=(os.getenv('SMTP_FROM') or user).split('@')[-1])
+    msg.set_content(
+        f'你的登录验证码是 {code}，5 分钟内有效。\n\n'
+        '如果这不是你本人的操作，忽略本邮件即可，你的账号不会被登录。\n'
+        '没在收件箱看到这封邮件时，请顺便看一下垃圾邮件目录。\n')
     # Only encrypted SMTP; authorization code never reaches the browser or logs.
     with smtplib.SMTP_SSL(host, int(os.getenv('SMTP_PORT', '465')), timeout=15) as client:
         client.login(user, password)
         client.send_message(msg)
 
 
+def debug_send(email, code):
+    """本机联调用的发信替身：不联网，把验证码打到终端并追加到 backend/data/mail-debug.log。
+
+    只有显式设置 MAIL_DEBUG=1 才会启用，用于还没拿到 163 授权码时跑通整条登录链路。
+    公网部署必须保持 MAIL_DEBUG=0，否则验证码会留在日志里。
+    """
+    LOG.warning('MAIL_DEBUG=1，未真实发信：%s 的验证码是 %s', email, code)
+    print(f'[MAIL_DEBUG] {time.strftime("%Y-%m-%d %H:%M:%S")} {email} {code}', flush=True)
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'mail-debug.log')
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'a', encoding='utf-8') as f:
+            f.write(f'{time.strftime("%Y-%m-%d %H:%M:%S")}\t{email}\t{code}\n')
+    except OSError:
+        pass
+
+
+def default_mailer():
+    return debug_send if os.getenv('MAIL_DEBUG') == '1' else smtp_send
+
+
 class Service:
     def __init__(self, db_path, secret, mailer=None, model=None, admins=None):
         require(len(secret) >= 32, 'APP_SECRET 至少 32 个字符，必须在服务端设置', 503)
         self.path, self.secret = str(db_path), secret.encode()
-        self.mailer, self.model = mailer or smtp_send, model or Model()
+        self.mailer, self.model = mailer or default_mailer(), model or Model()
         self.admins = set(admins if admins is not None else os.getenv('ADMIN_STUDENT_NOS', '').split(','))
         self.domain = os.getenv('SCHOOL_EMAIL_DOMAIN', 'whu.edu.cn')
+        # 试点白名单：学号前缀（年级），如 PILOT_STUDENT_PREFIXES=2025,2024。
+        # 留空表示不限制，任何 13 位学号都能申请验证码。
+        self.prefixes = tuple(p.strip() for p in os.getenv('PILOT_STUDENT_PREFIXES', '').split(',') if p.strip())
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.workers = []
@@ -159,6 +192,8 @@ class Service:
 
     def send_code(self, no, ip):
         require(bool(re.fullmatch(r'\d{13}', str(no))), '请输入 13 位学号')
+        require(not self.prefixes or any(str(no).startswith(p) for p in self.prefixes),
+                '该学号暂未开通试用（当前仅限 ' + '/'.join(self.prefixes) + ' 开头），请联系管理员', 403)
         hour = int(time.time() // 3600)
         self.limit(f'otp-ip:{self.digest(ip)}:{hour}', 20)
         self.limit(f'otp-user:{no}:{hour}', 5)

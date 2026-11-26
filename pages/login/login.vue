@@ -59,7 +59,10 @@ async function sendCode(){
     startCountdown()
     uni.showToast({title:'验证码已发送至 '+result.email,icon:'none'})
   }catch(e){
-    error.value='验证码发送失败，请稍后重试'
+    // 后端会把原因写在 message 里（请 60 秒后再获取验证码 / 验证码发送失败，请联系管理员检查发信配置），
+    // 不能吞成一句「请稍后重试」，否则用户和联调的人都看不出问题在哪。
+    error.value=e?.message||'验证码发送失败，请稍后重试'
+    if(e?.status===429)startCountdown()
   }finally{
     sending.value=false
   }
@@ -77,7 +80,8 @@ async function submit(){
     if(!result.ok){error.value=result.message;return}
     uni.redirectTo({url:homeFor(result.user.role)})
   }catch(e){
-    error.value='登录失败，请稍后重试'
+    // 例如「验证码不正确」「验证码已失效，请重新获取」「该账号已停用，请联系管理员」。
+    error.value=e?.message||'登录失败，请稍后重试'
   }finally{
     loading.value=false
   }

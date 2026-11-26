@@ -241,5 +241,28 @@ class BackendTest(unittest.TestCase):
             self.assertIsNone(c.execute('SELECT * FROM codes WHERE student_no=?', ('2026302012388',)).fetchone())
 
 
+    def test_pilot_prefix_whitelist_blocks_other_years(self):
+        with patch.dict('os.environ', {'PILOT_STUDENT_PREFIXES': '2025'}):
+            with tempfile.TemporaryDirectory() as tmp:
+                service = Service(Path(tmp) / 'pilot.sqlite3', 'x' * 48,
+                    mailer=lambda email, code: self.codes.update({email.split('@')[0]: code}))
+                server = Server(('127.0.0.1', 0), handler(service))
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                base = self.base
+                self.base = f'http://127.0.0.1:{server.server_port}/api'
+                try:
+                    status, body = self.req('/auth/code', {'studentNo': '2026302012345'})
+                    self.assertEqual(status, 403)
+                    self.assertIn('2025', body['error'])
+                    self.assertEqual(self.req('/auth/code', {'studentNo': '2025302012345'})[0], 200)
+                finally:
+                    self.base = base
+                    server.shutdown()
+                    server.server_close()
+                    thread.join()
+                    service.close()
+
+
 if __name__ == '__main__':
     unittest.main()
