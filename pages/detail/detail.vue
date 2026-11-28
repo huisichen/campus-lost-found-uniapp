@@ -11,15 +11,16 @@
   <text v-if="privateError" class="assistant-error">{{privateError}}</text><button class="btn-outline" :disabled="privateBusy" @tap="savePrivate">{{privateBusy?'正在登记…':'保存隐藏细节'}}</button>
  </view>
  <view v-if="item.kind==='found'&&item.status==='approved'&&currentRole==='user'&&ownId!==item.ownerId" class="claim-block">
-  <view class="section-title">申请认领</view><textarea v-model="claimNote" maxlength="140" placeholder="简单写下可以核实物品归属的特征，不要填写完整证件号码。"/>
+  <view class="section-title">申请认领</view><text v-if="!submitted&&!verification" class="rule-note">先核验隐藏细节；不确定时可直接转人工。</text><textarea v-if="!submitted&&!verification" v-model="claimNote" maxlength="140" placeholder="简单写下可以核实物品归属的特征，不要填写完整证件号码。"/>
   <template v-if="verification"><text class="rule-note assistant-note">{{verificationText}}</text>
    <view v-for="(check,i) in verification.checks||[]" :key="i" class="verification-line">{{i+1}}. {{check.question}} <text>{{check.verdict==='match'?'细节一致':'待人工核实'}}</text></view>
    <template v-if="verification.question"><text class="field-title">第 {{verification.question.number}} / {{verification.question.total}} 题：{{verification.question.text}}</text><textarea v-model="answer" maxlength="240" placeholder="只回答你记得的事实；不确定可以填写“不确定”。"/><button class="btn-primary" :disabled="claimBusy" @tap="answerQuestion">{{claimBusy?'正在核验…':'提交回答'}}</button></template>
   </template>
   <text v-if="claimError" class="assistant-error">{{claimError}}</text>
-  <button v-if="!verification?.question" class="btn-primary" :disabled="claimBusy||submitted" @tap="claim">{{submitted?'认领申请已提交':claimBusy?'正在处理…':verification?'提交管理员核验':item.category==='证件卡类'?'提交认领申请':'开始智能核验'}}</button>
-  <button v-if="claimError&&!submitted" class="btn-outline" :disabled="claimBusy" @tap="manualClaim">转人工核验</button>
+  <button v-if="!verification?.question" class="btn-primary" :disabled="claimBusy||submitted" @tap="claim">{{submitted?'申请已提交，请在“我的认领”跟进交接':claimBusy?'正在处理…':verification?'提交管理员核验':item.category==='证件卡类'?'提交认领申请':'开始智能核验'}}</button>
+  <button v-if="!submitted" class="btn-outline" :disabled="claimBusy" @tap="manualClaim">转人工核验</button>
  </view>
+ <view v-if="currentRole==='user'&&ownId!==item.ownerId" class="claim-block"><button class="btn-outline" @tap="contact">联系发布者／转人工</button><text class="rule-note">消息在平台内发送，发布者和管理员可在“我的／联系与人工”查看。</text></view>
  <view v-if="matches.length||matching||matchError" class="related"><view class="section-title">可能匹配的物品</view><text class="rule-note assistant-note">{{matching?'正在分析图文特征与时间地点…':matchError||'根据图文属性向量、类别和时空条件排序，分数表示线索强度，仍需核验归属。'}}</text><view v-for="p in matches" :key="p.id"><ItemRow :item="p"/><text class="rule-note assistant-note">{{p.aiScore?`匹配线索 ${p.aiScore} 分 · ${p.aiReason}`:'本机规则推荐，尚未完成 AI 分析'}}</text></view></view>
  </view>
 </template>
@@ -27,6 +28,8 @@
 import {ref,computed} from 'vue';import {onLoad} from '@dcloudio/uni-app';import AppIcon from '../../components/AppIcon.vue';import ItemRow from '../../components/ItemRow.vue'
 import {findPost,STATUS,session,places,publishedPosts,requestClaim,refreshCloud,claims} from '../../utils/store.js'
 import {aiAvailable,matchLostItem,syncAiItem,aiItemState,startClaimVerification,answerClaimVerification,takeVerificationReceipt} from '../../utils/ai-service.js'
+import {serverEnabled} from '../../utils/server.js';import {assistantCall} from '../../utils/assistant-client.js'
+function contact(){if(!serverEnabled){uni.showToast({title:'此版本未连接云端联系服务',icon:'none'});return}uni.navigateTo({url:'/pages/assistant/assistant?postId='+item.value.id+'&support=1'})}
 const item=ref(null),claimNote=ref(''),ownId=ref(''),currentRole=ref(''),points=ref([])
 const aiRelated=ref(null),matching=ref(false),matchError=ref(''),privateDetails=ref(''),privateReady=ref(false),privateBusy=ref(false),privateError=ref('')
 const verification=ref(null),answer=ref(''),claimBusy=ref(false),claimError=ref(''),submitted=ref(false)

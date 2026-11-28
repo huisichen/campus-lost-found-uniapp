@@ -103,7 +103,7 @@ export function mapPost(row) {
 }
 export function mapClaim(row) {
   return { id: row.id, postId: row.post_id, userId: row.user_id, userName: row.user_name,
-    note: row.note, status: row.status, createdAt: localTime(row.created_at),verification:row.verification||null }
+    note: row.note, status: row.status, createdAt: localTime(row.created_at),verification:row.verification||null,handoff:row.handoff||{},reviewNote:row.review_note||'',returnedAt:localTime(row.returned_at) }
 }
 export function mapPoint(row) {
   return { id: row.id, name: row.name, address: row.address, hours: row.hours,

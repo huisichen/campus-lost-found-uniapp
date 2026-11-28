@@ -120,8 +120,8 @@ export function requestClaim(postId,note,verification=null){initialize();const s
  const safe=verification?{sessionId:verification.sessionId,decision:verification.decision,completed:verification.completed,total:verification.total,checks:(verification.checks||[]).map(x=>({question:x.question,verdict:x.verdict}))}:null;
  put(K.claims,[{id:`c${Date.now()}`,postId,userId:s.id,userName:s.name,note:note.slice(0,140),status:'pending',createdAt:dateTime(),verification:safe},...claims()]);return true}
 async function cloudClaim(postId,note,s,verification){await table('claims',{method:'POST',data:{id:`c${Date.now()}${Math.random().toString(36).slice(2,8)}`,post_id:postId,user_id:s.id,user_name:s.name,note:note.slice(0,140),status:'pending',...(serverEnabled?{verification}: {})}});await refreshCloud();return true}
-export function setClaimStatus(id,status){if(session()?.role!=='admin')return false;if(cloudEnabled)return cloudSetClaimStatus(id,status);const arr=claims();const c=arr.find(x=>x.id===id);if(!c)return false;c.status=status;put(K.claims,arr);return true}
-async function cloudSetClaimStatus(id,status){await table('claims',{method:'PATCH',query:`?id=eq.${encodeURIComponent(id)}`,data:{status}});await refreshCloud();return true}
+export function setClaimStatus(id,status,reviewNote=''){if(session()?.role!=='admin')return false;if(cloudEnabled)return cloudSetClaimStatus(id,status,reviewNote);const arr=claims();const c=arr.find(x=>x.id===id);if(!c)return false;c.status=status;put(K.claims,arr);return true}
+async function cloudSetClaimStatus(id,status,reviewNote){await table('claims',{method:'PATCH',query:`?id=eq.${encodeURIComponent(id)}`,data:{status,...(serverEnabled?{review_note:reviewNote}:{})}});await refreshCloud();return true}
 export function matchNotifications(){return cloudEnabled?cloudState.notifications:[]}
 export async function refreshMatchNotifications(){if(!cloudEnabled)return[];const rows=await table('match_notifications',{query:'?select=*&order=created_at.desc&limit=50'});cloudState.notifications=rows;return rows}
 export function userProfiles(){return cloudEnabled?cloudState.profiles:listUsers()}
@@ -130,5 +130,5 @@ export function stats(){const all=posts(),today=dateOnly(),ds=[];for(let i=6;i>=
  const locCount={};const categories={};for(const p of all){if(p.kind==='lost')locCount[p.location]=(locCount[p.location]||0)+1;categories[p.category]=(categories[p.category]||0)+1}
  return {total:all.length,todayLost:all.filter(x=>x.kind==='lost'&&x.createdAt.startsWith(today)).length,todayFound:all.filter(x=>x.kind==='found'&&x.createdAt.startsWith(today)).length,todayReturned:all.filter(x=>x.returnedAt?.startsWith(today)).length,pending:all.filter(x=>x.status==='pending').length+claims().filter(x=>x.status==='pending').length,trends:ds,locations:Object.keys(locCount).map(name=>({name,value:locCount[name]})).sort((a,b)=>b.value-a.value),categories:Object.keys(categories).map(name=>({name,value:categories[name]})).sort((a,b)=>b.value-a.value)} }
 export const STATUS={pending:'待审核',approved:'寻找中',returned:'已归还',rejected:'未通过',closed:'已关闭'}
-export const CLAIM_STATUS={pending:'待核实',approved:'已通过',rejected:'未通过'}
+export const CLAIM_STATUS={pending:'待核实',approved:'待交接',returned:'已归还',rejected:'未通过'}
 export function categoryIcon(cat){return {'证件卡类':'id','电子数码':'phone','包袋衣物':'bag','生活用品':'cup','学习用品':'book','钥匙卡类':'key','其他':'other'}[cat]||'other'}

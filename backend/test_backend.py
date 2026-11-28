@@ -170,7 +170,7 @@ class BackendTest(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(third, [])
         self.assertEqual((first[0]['lost_id'], first[0]['found_id']), (lost['id'], found['id']))
-        self.assertEqual(sum(t == 'features' for t, _ in self.model.calls), 2)
+        self.assertEqual(sum(t == 'features' for t, _ in self.model.calls), 3)
         ops = self.req('/admin/operations', token=self.admin['access_token'])[1]
         self.assertEqual(sum(x['total_tokens'] for x in ops['usage']), len(self.model.calls) * 120)
         self.assertEqual(self.req('/admin/operations', token=self.u1['access_token'])[0], 403)
@@ -263,6 +263,51 @@ class BackendTest(unittest.TestCase):
                     thread.join()
                     service.close()
 
+
+    def test_handoff_requires_both_parties_and_admin_return(self):
+        p = self.make(self.u1)
+        self.approve(p)
+        _, rows = self.req('/data/claims', {'post_id': p['id'], 'note': '这是我的背包'}, self.u2['access_token'])
+        claim = rows[0]
+        url = '/data/claims?id=eq.' + claim['id']
+        self.assertEqual(self.req(url, {'status': 'approved'}, self.admin['access_token'], 'PATCH')[0], 200)
+        self.assertEqual(self.req('/data/posts', token=self.u2['access_token'])[1][0]['status'], 'approved')
+        self.assertEqual(self.req(url, {'status': 'returned'}, self.admin['access_token'], 'PATCH')[0], 400)
+        self.assertEqual(self.req('/assistant', {'action': 'handoff', 'claimId': claim['id']}, self.u3['access_token'])[0], 403)
+        for user in (self.u1, self.u2):
+            self.assertEqual(self.req('/assistant', {'action': 'handoff', 'claimId': claim['id']}, user['access_token'])[0], 200)
+        self.assertEqual(self.req(url, {'status': 'returned'}, self.admin['access_token'], 'PATCH')[0], 200)
+        self.assertEqual(self.req('/data/posts', token=self.u1['access_token'])[1][0]['status'], 'returned')
+
+    def test_conversation_search_filters_and_private_contact(self):
+        p = self.make(self.u1)
+        self.approve(p)
+        old = self.model.call
+        self.model.call = lambda task, data: ({'color': '黑色'}, {'total_tokens': 5}) if task == 'search' else old(task, data)
+        _, result = self.req('/assistant', {'action': 'search', 'kind': 'lost', 'category': '包袋衣物'}, self.u2['access_token'])
+        self.assertEqual(result['total'], 1)
+        sid = result['sessionId']
+        _, result = self.req('/assistant', {'action': 'search', 'sessionId': sid, 'message': '黑色'}, self.u2['access_token'])
+        self.assertEqual(result['total'], 1)
+        self.assertNotIn('checks', result['items'][0])
+        self.assertEqual(self.req('/assistant', {'action': 'search', 'sessionId': sid, 'message': '黑色'}, self.u3['access_token'])[0], 404)
+        status, result = self.req('/assistant', {'action': 'support', 'postId': p['id'], 'message': '想核实并联系交接'}, self.u2['access_token'])
+        self.assertEqual(status, 200)
+        tid = result['ticket']['id']
+        self.assertEqual(len(self.req('/assistant', {'action': 'support_list'}, self.u1['access_token'])[1]['tickets']), 1)
+        self.assertEqual(self.req('/assistant', {'action': 'support_reply', 'ticketId': tid, 'message': '冒充'}, self.u3['access_token'])[0], 403)
+        self.assertEqual(self.req('/assistant', {'action': 'support_reply', 'ticketId': tid, 'message': '请管理员安排交接'}, self.u1['access_token'])[0], 200)
+
+    def test_retry_done_job_and_matching_shape_synonyms(self):
+        a = self.make(self.u1, 'lost'); b = self.make(self.u2)
+        self.approve(a); self.approve(b)
+        while self.service.run_job():
+            pass
+        self.assertEqual(self.req('/match/recheck', {'postId': a['id']}, self.u1['access_token'])[0], 202)
+        with self.service.db() as c:
+            self.assertEqual(c.execute('SELECT state FROM jobs WHERE post_id=?', (a['id'],)).fetchone()[0], 'pending')
+        ranked = self.service.ranked(a, {'colors': ['黑色'], 'shape': '双肩包'}, b, {'colors': ['黑'], 'shape': '背包'})
+        self.assertFalse(ranked['conflict'])
 
 if __name__ == '__main__':
     unittest.main()

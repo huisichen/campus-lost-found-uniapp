@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const output = join(root, 'docs')
+const output = process.env.CAMPUS_OUTPUT_DIR ? resolve(root, process.env.CAMPUS_OUTPUT_DIR) : join(root, 'docs')
 const base = '/campus-lost-found-uniapp/'
 const require = createRequire(import.meta.url)
 const compiler = require.resolve('@dcloudio/vite-plugin-uni/bin/uni.js')

@@ -4,7 +4,7 @@ function mime(path) {
 }
 export async function imageDataUrl(path) {
   if (!path) return ''
-  if (path.startsWith('data:image/')) return path
+  if (path.startsWith('data:image/') && typeof document === 'undefined') return path
   if (typeof plus !== 'undefined' && plus.io) {
     const localPath=path.startsWith('/static/')?`_www${path}`:path
     return new Promise((resolve,reject)=>{
@@ -21,6 +21,15 @@ export async function imageDataUrl(path) {
     const response = await fetch(new URL(path, window.location.href).href)
     if (!response.ok) throw new Error('无法读取物品照片，请重新选择图片')
     const blob = await response.blob()
+    if (typeof document !== 'undefined') {
+      return new Promise((resolve,reject)=>{
+        const img=new Image(),url=URL.createObjectURL(blob)
+        const timer=setTimeout(()=>{URL.revokeObjectURL(url);reject(new Error('照片读取超时，请重新选择图片'))},15000)
+        img.onerror=()=>{clearTimeout(timer);URL.revokeObjectURL(url);reject(new Error('无法解析照片，请换成 JPG 或 PNG'))}
+        img.onload=()=>{try{const scale=Math.min(1,1600/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);const result=canvas.toDataURL('image/jpeg',.8);if(result.length>3.3*1024*1024)throw new Error('图片仍然过大，请裁剪后重试');resolve(result)}catch(e){reject(e)}finally{clearTimeout(timer);URL.revokeObjectURL(url)}}
+        img.src=url
+      })
+    }
     if (blob.size > 2.5 * 1024 * 1024) throw new Error('图片超过 2.5 MB，请压缩后重试')
     return new Promise((resolve, reject) => {
       const reader = new FileReader()

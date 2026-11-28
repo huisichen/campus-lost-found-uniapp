@@ -7,6 +7,7 @@
   <scroll-view scroll-x class="category-scroll" :show-scrollbar="false"><view class="category-list"><view v-for="c in categories" :key="c" class="cat" :class="selectedCat===c?'cat-active':''" @tap="selectedCat=c"><AppIcon :name="categoryIcon(c)" :size="40"/><text>{{c}}</text></view></view></scroll-view>
  </view>
  <view class="action-strip"><view @tap="toPublish('lost')"><AppIcon name="search" :size="38"/><text>发布丢失信息</text><text class="arrow">›</text></view><view @tap="toPublish('found')"><AppIcon name="add" :size="38"/><text>发布招领信息</text><text class="arrow">›</text></view></view>
+ <button class="btn-outline" style="margin:16rpx 24rpx" @tap="openAssistant">与 AI 对话找物／转人工</button>
  <view class="list-box">
   <view class="section-head"><view class="section-title">{{active==='lost'?'丢失物品':active==='found'?'拾取物品':'最新失物与招领'}}<text class="result-count">共{{filtered.length}}条</text></view><view class="refresh" @tap="reload"><AppIcon name="refresh" :size="29"/><text>刷新</text></view></view>
   <view class="filter-tabs"><text :class="active==='home'?'active':''" @tap="active='home'">全部</text><text :class="active==='lost'?'active':''" @tap="active='lost'">丢失物品</text><text :class="active==='found'?'active':''" @tap="active='found'">拾取物品</text></view>
@@ -23,6 +24,7 @@ import {CATEGORIES,categoryIcon,publishedPosts,requireRole,refreshCloud} from '.
 const categories=['全部分类',...CATEGORIES];const active=ref('home'),selectedCat=ref('全部分类'),query=ref(''),items=ref([])
 const filtered=computed(()=>items.value.filter(p=>(active.value==='home'||p.kind===active.value)&&(selectedCat.value==='全部分类'||p.category===selectedCat.value)&&(!query.value||[p.title,p.description,p.location,p.category].join(' ').includes(query.value.trim()))))
 async function reload(){try{await refreshCloud();items.value=publishedPosts()}catch(e){uni.showToast({title:e.message||'刷新失败',icon:'none'})}}
+function openAssistant(){uni.navigateTo({url:'/pages/assistant/assistant'})}
 function searchGo(){reload()}
 function toPublish(kind){uni.navigateTo({url:'/pages/publish/publish?kind='+kind})}
 function toPoints(){uni.navigateTo({url:'/pages/points/points'})}

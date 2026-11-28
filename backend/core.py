@@ -294,6 +294,7 @@ class Service:
         c.execute('INSERT INTO audit VALUES(?,?,?,?,?)', (ident(), user['id'], action, pid, now()))
 
     def enqueue(self, c, pid, revision):
+        c.execute("UPDATE jobs SET state='pending',attempts=0,available=?,error=NULL WHERE post_id=? AND revision=? AND state IN ('done','failed')", (time.time(), pid, revision))
         c.execute('INSERT OR IGNORE INTO jobs(id,post_id,revision,state,available) VALUES(?,?,?,?,?)',
                   (ident(), pid, revision, 'pending', time.time()))
 
@@ -303,8 +304,8 @@ class Service:
                 rows = c.execute('SELECT data FROM posts WHERE ?=? OR owner_id=? OR status IN (?,?) ORDER BY rowid DESC LIMIT 1000',
                                  (user['role'], 'admin', user['id'], 'approved', 'returned')).fetchall()
             elif name == 'claims':
-                rows = c.execute('SELECT data FROM claims WHERE ?=? OR user_id=? ORDER BY rowid DESC LIMIT 1000',
-                                 (user['role'], 'admin', user['id'])).fetchall()
+                rows = c.execute('SELECT c.data FROM claims c JOIN posts p ON p.id=c.post_id WHERE ?=? OR c.user_id=? OR p.owner_id=? ORDER BY c.rowid DESC LIMIT 1000',
+                                 (user['role'], 'admin', user['id'], user['id'])).fetchall()
             elif name == 'return_points':
                 rows = c.execute('SELECT data FROM points ORDER BY id').fetchall()
             elif name == 'profiles':
@@ -408,6 +409,9 @@ class Service:
                     c.execute('UPDATE verifications SET consumed=1 WHERE id=?', (sid,))
                 item = dict(id=ident(), post_id=p['id'], user_id=user['id'], user_name=user['name'],
                             status='pending', note=scrub(data['note'], 140), created_at=now(), verification=verification)
+                linked = c.execute('SELECT lost_id FROM matches WHERE found_id=? AND lost_user=? ORDER BY score DESC LIMIT 1', (p['id'], user['id'])).fetchone()
+                if linked:
+                    item['lost_post_id'] = linked[0]
                 c.execute('INSERT INTO claims VALUES(?,?,?,?,?)', (item['id'], p['id'], user['id'], 'pending', dump(item)))
                 self.audit(c, user, 'claim', item['id'])
             return [item]
@@ -415,11 +419,28 @@ class Service:
         with self.db() as c:
             if name == 'claims' and method == 'PATCH':
                 r = c.execute('SELECT * FROM claims WHERE id=?', (row_id,)).fetchone()
-                require(r and r['status'] == 'pending' and data.get('status') in ('approved', 'rejected'), '申请状态不允许此操作')
+                require(r and ((r['status'] == 'pending' and data.get('status') in ('approved', 'rejected')) or (r['status'] == 'approved' and data.get('status') == 'returned')), '申请状态不允许此操作')
                 p = c.execute('SELECT status FROM posts WHERE id=?', (r['post_id'],)).fetchone()
                 require(p and p[0] == 'approved', '物品当前不可认领')
                 item = json.loads(r['data'])
                 item['status'] = data['status']
+                item['review_note'] = scrub(data.get('review_note'), 500)
+                item['reviewed_at'] = now()
+                if item['status'] == 'approved':
+                    require(not c.execute("SELECT 1 FROM claims WHERE post_id=? AND status IN ('approved','returned') AND id!=?", (r['post_id'], row_id)).fetchone(), '该物品已有通过的认领，请先核实交接')
+                if item['status'] == 'returned':
+                    post = json.loads(c.execute('SELECT data FROM posts WHERE id=?', (r['post_id'],)).fetchone()[0])
+                    require(item.get('handoff', {}).get('claimant') and item.get('handoff', {}).get('finder') or len(item['review_note']) >= 5, '双方尚未确认交接，请填写人工核实依据')
+                    post.update(status='returned', returned_at=now())
+                    c.execute("UPDATE posts SET status='returned',data=?,revision=revision+1 WHERE id=?", (dump(post), post['id']))
+                    c.execute('DELETE FROM matches WHERE found_id=? OR lost_id=?', (post['id'], post['id']))
+                    item['returned_at'] = now()
+                    if item.get('lost_post_id'):
+                        linked = c.execute("SELECT data FROM posts WHERE id=? AND owner_id=? AND kind='lost' AND status='approved'", (item['lost_post_id'], r['user_id'])).fetchone()
+                        if linked:
+                            lost = json.loads(linked[0]); lost.update(status='returned', returned_at=now())
+                            c.execute("UPDATE posts SET status='returned',data=?,revision=revision+1 WHERE id=?", (dump(lost), lost['id']))
+                            c.execute('DELETE FROM matches WHERE lost_id=?', (lost['id'],))
                 c.execute('UPDATE claims SET status=?,data=? WHERE id=?', (item['status'], dump(item), row_id))
                 self.audit(c, user, 'claim:' + item['status'], row_id)
                 return [item]
@@ -491,6 +512,13 @@ class Service:
         return v
 
     def ranked(self, a, fa, b, fb):
+        def canonical(f):
+            f = dict(f)
+            f['colors'] = [str(x).replace('色', '') for x in f.get('colors', [])]
+            aliases = {'双肩包': '背包', '双肩背包': '背包', '双肩背包形': '背包'}
+            f['shape'] = aliases.get(f.get('shape'), f.get('shape'))
+            return f
+        fa, fb = canonical(fa), canonical(fb)
         va, vb = self.vector(fa), self.vector(fb)
         norm = math.sqrt(sum(x*x for x in va) * sum(x*x for x in vb))
         similarity = sum(x*y for x, y in zip(va, vb)) / norm if norm else 0
@@ -509,21 +537,21 @@ class Service:
             if not r:
                 return
             source, revision = json.loads(r['data']), r['revision']
-            rows = c.execute("SELECT * FROM posts WHERE status='approved' AND category=? AND kind!=? AND owner_id!=? ORDER BY rowid DESC LIMIT 30",
+            rows = c.execute("SELECT * FROM posts WHERE status='approved' AND category=? AND kind!=? AND owner_id!=? ORDER BY rowid DESC LIMIT 200",
                              (r['category'], r['kind'], r['owner_id'])).fetchall()
         # Category/owner/status filter happens in SQL before any model calls.
+        fa = self.feature(source['owner_id'], source)
         if not rows:
             return
-        fa = self.feature(source['owner_id'], source)
         candidates = []
         for row in rows:
             p = json.loads(row['data'])
             fb = self.feature(source['owner_id'], p)
             ranked = self.ranked(source, fa, p, fb)
-            if ranked['score'] >= 45:
+            if ranked['score'] >= 45 or not ranked['conflict']:
                 candidates.append((p, row['revision'], ranked))
         candidates.sort(key=lambda x: x[2]['score'], reverse=True)
-        candidates = candidates[:5]
+        candidates = candidates[:10]
         if not candidates:
             return
         result = self.ask(source['owner_id'], 'match', {'source': fa, 'candidates': [x[2] for x in candidates]})
@@ -542,7 +570,7 @@ class Service:
                 if not current or tuple(current) != ('approved', rev):
                     continue
                 value = value * 100 if 0 < value <= 1 else value
-                score = min(55 if ranked['conflict'] else 100, round(.4 * ranked['score'] + .6 * max(0, min(100, value))))
+                score = min(55 if ranked['conflict'] else 100, round(.25 * ranked['score'] + .75 * max(0, min(100, value))))
                 if score < 65:
                     continue
                 lost, found = (source, p) if source['kind'] == 'lost' else (p, source)
@@ -600,6 +628,9 @@ class Service:
 
     def assistant(self, user, data):
         action = data.get('action')
+        if action in ('search', 'support', 'support_list', 'support_reply', 'handoff', 'jobs'):
+            from .workflow import workflow
+            return workflow(self, user, data)
         if action == 'analyze':
             require(user['role'] == 'user', '请使用用户账号', 403)
             image = picture((data.get('item') or {}).get('image'))

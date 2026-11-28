@@ -6,6 +6,7 @@
         "navigationStyle": "custom"
       }
     },
+    {"path":"pages/assistant/assistant","style":{"navigationBarTitleText":"智能找物与人工协助"}},
     {
       "path": "pages/home/home",
       "style": {
