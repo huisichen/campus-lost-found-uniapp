@@ -155,6 +155,17 @@ class BackendTest(unittest.TestCase):
         with self.assertRaises(Problem):
             self.service.media(p['id'], q['user'][0], q['expires'][0], q['signature'][0])
 
+    def test_bilingual_brand_does_not_suppress_true_candidate(self):
+        a = {'id': 'lost', 'kind': 'lost', 'location': '图书馆', 'event_start': '2026-11-26'}
+        b = {'id': 'found', 'kind': 'found', 'location': '图书馆', 'event_end': '2026-11-27'}
+        fa = {'brand': '华为', 'shape': '椭圆形', 'colors': ['银色']}
+        fb = {'brand': ' HUAWEI ', 'shape': '椭圆形', 'colors': []}
+        ranked = self.service.ranked(a, fa, b, fb)
+        self.assertFalse(ranked['conflict'])
+        self.assertGreaterEqual(ranked['score'], 65)
+        fb['brand'] = 'Apple'
+        self.assertTrue(self.service.ranked(a, fa, b, fb)['conflict'])
+
     def test_category_first_matching_both_owners_tokens_and_restart(self):
         found = self.make(self.u1)
         lost = self.make(self.u2, 'lost')

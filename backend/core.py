@@ -517,6 +517,12 @@ class Service:
             f['colors'] = [str(x).replace('色', '') for x in f.get('colors', [])]
             aliases = {'双肩包': '背包', '双肩背包': '背包', '双肩背包形': '背包'}
             f['shape'] = aliases.get(f.get('shape'), f.get('shape'))
+            brand = re.sub(r'[\s._-]', '', str(f.get('brand') or '').casefold())
+            brand_aliases = {'huawei': '华为', 'apple': '苹果', 'xiaomi': '小米',
+                             'samsung': '三星', 'honor': '荣耀', 'lenovo': '联想',
+                             'sony': '索尼', 'dell': '戴尔', 'asus': '华硕',
+                             'vivo': 'vivo', 'oppo': 'oppo', 'redmi': '红米'}
+            f['brand'] = brand_aliases.get(brand, brand)
             return f
         fa, fb = canonical(fa), canonical(fb)
         va, vb = self.vector(fa), self.vector(fb)

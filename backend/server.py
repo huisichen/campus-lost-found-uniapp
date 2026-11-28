@@ -71,7 +71,7 @@ def handler(service, static_dir=None):
             if self.command == 'OPTIONS':
                 return self.send(204)
             if path == '/api/health' and self.command == 'GET':
-                return self.send(200, {'ok': True, 'version': '2026-11-28-workflow'})
+                return self.send(200, {'ok': True, 'version': '2026-11-28-workflow.1'})
             if path.startswith('/api/media/') and self.command == 'GET':
                 q = parse_qs(urlsplit(self.path).query)
                 mime, content = service.media(path.removeprefix('/api/media/'), q.get('user', [''])[0],

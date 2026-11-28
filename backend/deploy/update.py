@@ -54,7 +54,7 @@ try:
         try:
             with urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3) as response:
                 health = json.load(response)
-            if health.get('version') == '2026-11-28-workflow':
+            if health.get('version') == '2026-11-28-workflow.1':
                 break
         except Exception:
             pass
